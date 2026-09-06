@@ -47,17 +47,35 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   const [ratingFeedback, setRatingFeedback] = useState<string>('Smooth exchange session, verified without issue.');
   const [showForfeitModal, setShowForfeitModal] = useState<boolean>(false);
 
-  const [isUserLocked, setIsUserLocked] = useState<boolean>(session.status !== 'setup');
-  const [isPartnerLocked, setIsPartnerLocked] = useState<boolean>(session.status !== 'setup');
+  const [isUserLocked, setIsUserLocked] = useState<boolean>(session?.status !== 'setup');
+  const [isPartnerLocked, setIsPartnerLocked] = useState<boolean>(session?.status !== 'setup');
 
-  const partnerTrust = getTrustTier(session.partner.trustScore);
+  const partnerLinks = Array.isArray(session?.partnerLinks) ? session.partnerLinks : [];
+  const userLinks = Array.isArray(session?.userLinks) ? session.userLinks : [];
+  const partner = session?.partner || {
+    id: 'peer_fallback',
+    username: 'Peer',
+    trustScore: 80,
+    ipAddress: '192.168.1.1',
+  };
+  const partnerTelemetry = session?.partnerTelemetry || {
+    currentLinkIndex: 0,
+    currentLinkStatus: 'idle',
+    secondsRemaining: 0,
+    completedCount: 0,
+    totalCount: userLinks.length,
+    lastActionText: 'Connected and synchronized.',
+    latencyMs: 24,
+  };
 
-  const userVerifiedCount = session.partnerLinks.filter(l => l.status === 'verified').length;
-  const userTotalCount = session.partnerLinks.length;
+  const partnerTrust = getTrustTier(partner.trustScore);
+
+  const userVerifiedCount = partnerLinks.filter(l => l.status === 'verified').length;
+  const userTotalCount = partnerLinks.length;
   const userProgressPercent = userTotalCount > 0 ? Math.round((userVerifiedCount / userTotalCount) * 100) : 0;
 
-  const partnerVerifiedCount = session.userLinks.filter(l => l.status === 'verified').length;
-  const partnerTotalCount = session.userLinks.length;
+  const partnerVerifiedCount = userLinks.filter(l => l.status === 'verified').length;
+  const partnerTotalCount = userLinks.length;
   const partnerProgressPercent = partnerTotalCount > 0 ? Math.round((partnerVerifiedCount / partnerTotalCount) * 100) : 0;
 
   const isBothCompleted = userProgressPercent === 100 && partnerProgressPercent === 100;
@@ -75,7 +93,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   }, []);
 
   useEffect(() => {
-    if (session.status === 'setup' && isUserLocked && !isPartnerLocked) {
+    if (session?.status === 'setup' && isUserLocked && !isPartnerLocked) {
       const timer = setTimeout(() => {
         setIsPartnerLocked(true);
         onUpdateSession({
@@ -89,11 +107,11 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   }, [session, isUserLocked, isPartnerLocked, onUpdateSession]);
 
   useEffect(() => {
-    const firstPendingIdx = session.partnerLinks.findIndex(l => l.status !== 'verified');
+    const firstPendingIdx = partnerLinks.findIndex(l => l.status !== 'verified');
     if (firstPendingIdx !== -1) {
       setActiveUserLinkIndex(firstPendingIdx);
     }
-  }, [session.partnerLinks]);
+  }, [partnerLinks]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -120,7 +138,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
     const stepDuration = simulationSpeed === 'normal' ? 8000 : simulationSpeed === 'fast' ? 2200 : 800;
 
     const partnerTimer = setTimeout(() => {
-      const updatedUserLinks = [...session.userLinks];
+      const updatedUserLinks = [...userLinks];
       const nextPendingIndex = updatedUserLinks.findIndex(l => l.status === 'pending' || l.status === 'in_progress');
 
       if (nextPendingIndex !== -1) {
@@ -135,10 +153,11 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             ...session,
             userLinks: updatedUserLinks,
             partnerTelemetry: {
-              ...session.partnerTelemetry,
+              ...partnerTelemetry,
               currentLinkIndex: nextPendingIndex,
               currentLinkStatus: 'dwelling',
               secondsRemaining: simulationSpeed === 'normal' ? 24 : 4,
+              totalCount: userLinks.length,
               lastActionText: `Dwelling link #${nextPendingIndex + 1} (${extractDomain(link.url)})`,
               latencyMs: 24,
             }
@@ -154,11 +173,12 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             ...session,
             userLinks: updatedUserLinks,
             partnerTelemetry: {
-              ...session.partnerTelemetry,
+              ...partnerTelemetry,
               currentLinkIndex: nextPendingIndex,
               currentLinkStatus: 'verified',
               secondsRemaining: 0,
               completedCount: newCompletedCount,
+              totalCount: userLinks.length,
               lastActionText: `Link #${nextPendingIndex + 1} verified.`,
               latencyMs: 22,
             }
@@ -168,7 +188,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
     }, stepDuration);
 
     return () => clearTimeout(partnerTimer);
-  }, [session, partnerProgressPercent, simulationSpeed, onUpdateSession]);
+  }, [session, userLinks, partnerTelemetry, partnerProgressPercent, simulationSpeed, onUpdateSession]);
 
   const handleOpenLinkAndStartTimer = (link: ExchangeLink, index: number) => {
     try {
@@ -182,7 +202,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
     setCurrentDwellCountdown(dwellDuration);
     setIsDwellRunning(true);
 
-    const updated = [...session.partnerLinks];
+    const updated = [...partnerLinks];
     updated[index] = {
       ...updated[index],
       status: 'in_progress',
@@ -196,7 +216,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   };
 
   const handleVerifyLink = (index: number) => {
-    const updated = [...session.partnerLinks];
+    const updated = [...partnerLinks];
     updated[index] = {
       ...updated[index],
       status: 'verified',
@@ -384,7 +404,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
 
           {/* Links Queue */}
           <div className="space-y-2 flex-1">
-            {session.partnerLinks.map((link, idx) => {
+            {partnerLinks.map((link, idx) => {
               const isVerified = link.status === 'verified';
               const isInProgress = link.status === 'in_progress';
               const isCurrent = idx === activeUserLinkIndex;
@@ -498,13 +518,13 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
               <span>Event Stream:</span>
             </div>
             <span className="text-xs text-zinc-300 truncate max-w-[240px]">
-              {session.partnerTelemetry.lastActionText}
+              {partnerTelemetry.lastActionText}
             </span>
           </div>
 
           {/* User Links List */}
           <div className="space-y-2 flex-1">
-            {session.userLinks.map((link, idx) => {
+            {userLinks.map((link, idx) => {
               const isVerified = link.status === 'verified';
               const isInProgress = link.status === 'in_progress';
 

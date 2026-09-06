@@ -20,7 +20,7 @@ import { getTrustTier, formatTimeRemaining } from '../utils/trustUtils';
 interface DiscoveryPoolProps {
   currentUser: User;
   peers: User[];
-  ipCooldowns: IPCooldownRecord[];
+  ipCooldowns?: IPCooldownRecord[];
   incomingProposal: ExchangeProposal | null;
   onProposeExchange: (peer: User) => void;
   onAcceptProposal: (proposal: ExchangeProposal) => void;
@@ -32,8 +32,8 @@ interface DiscoveryPoolProps {
 
 export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
   currentUser,
-  peers,
-  ipCooldowns,
+  peers = [],
+  ipCooldowns = [],
   incomingProposal,
   onProposeExchange,
   onAcceptProposal,
@@ -45,8 +45,11 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'high_trust' | 'available' | 'favorites'>('all');
 
+  const safeCooldowns = Array.isArray(ipCooldowns) ? ipCooldowns : [];
+  const safePeers = Array.isArray(peers) ? peers : [];
+
   const getPeerCooldown = (peerId: string) => {
-    const record = ipCooldowns.find(c => c.partnerId === peerId);
+    const record = safeCooldowns.find(c => c.partnerId === peerId);
     if (!record) return null;
     const remainingMs = new Date(record.expiresAt).getTime() - Date.now();
     if (remainingMs <= 0) return null;
@@ -56,7 +59,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
     };
   };
 
-  const filteredPeers = peers.filter(peer => {
+  const filteredPeers = safePeers.filter(peer => {
     const matchesSearch = 
       peer.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       peer.preferredShorteners.some(s => s.toLowerCase().includes(searchTerm.toLowerCase())) ||

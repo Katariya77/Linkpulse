@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // User profiles collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+      allow create, update: if isOwner(userId) && isValidId(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    // Exchange sessions collection
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && isValidId(sessionId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(sessionId);
+      allow update: if isSignedIn() && isValidId(sessionId);
+      allow delete: if isSignedIn() && isValidId(sessionId);
+    }
+
+    // Trust ledger audit trail
+    match /trust_ledger/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(entryId);
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // Connection validation test endpoint
+    match /test/{testId} {
+      allow read, write: if true;
+    }
+  }
+}

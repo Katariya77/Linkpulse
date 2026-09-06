@@ -21,7 +21,8 @@ import {
   loginWithEmail, 
   registerWithEmail, 
   logoutUser, 
-  isFirebaseConfigured, 
+  isFirebaseConfigured,
+  firebaseConfig,
   AuthSessionUser 
 } from '../lib/firebase';
 import { User } from '../types';
@@ -121,9 +122,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
         {/* Header Branding */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-400">
-            <span className={`h-2 w-2 rounded-full ${isFirebaseConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            <span>{isFirebaseConfigured ? 'Connected to Firebase Auth' : 'Firebase Auth Active (Ready)'}</span>
+          <div className="inline-flex flex-wrap items-center justify-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${isFirebaseConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <span className="font-mono text-zinc-300 font-medium">{firebaseConfig.projectId}</span>
+            <span className="text-zinc-600">/</span>
+            <span className="font-mono text-zinc-400">{firebaseConfig.firestoreDatabaseId || 'linkpulse-db'}</span>
+            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] text-emerald-400 border border-emerald-900/60 font-medium">LIVE</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -427,17 +431,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         </div>
 
-        {/* Back to App button */}
-        <div className="text-center pt-2">
-          <button
-            type="button"
-            id="auth-back-to-app-footer-btn"
-            onClick={onNavigateToApp}
-            className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-          >
-            ← Return to Discovery Pool
-          </button>
-        </div>
+        {/* Back to App button (Only when authenticated) */}
+        {sessionUser && (
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              id="auth-back-to-app-footer-btn"
+              onClick={onNavigateToApp}
+              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+            >
+              ← Return to Discovery Pool
+            </button>
+          </div>
+        )}
 
       </div>
     </div>

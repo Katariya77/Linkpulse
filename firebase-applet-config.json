@@ -1,0 +1,12 @@
+{
+  "projectId": "namefinderji",
+  "appId": "1:395072875400:web:05b3ab8f0e6610c23a283d",
+  "apiKey": "AIzaSyDfLYBaPYPDYFBH-LZJ38jKko1TA5iXe6c",
+  "authDomain": "namefinderji.firebaseapp.com",
+  "firestoreDatabaseId": "linkpulse-db",
+  "storageBucket": "namefinderji.firebasestorage.app",
+  "messagingSenderId": "395072875400",
+  "measurementId": "",
+  "oAuthClientId": "395072875400-avob3r45hc0du1jeqe2s1olo4ec7cvjv.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
+}

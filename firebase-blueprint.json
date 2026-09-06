@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing reputation metrics, trust score, and identity information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "trustScore": { "type": "number" },
+        "exchangesCompleted": { "type": "number" },
+        "dwellComplianceRate": { "type": "number" },
+        "ratingAverage": { "type": "number" },
+        "onlineStatus": { "type": "string", "enum": ["online", "busy", "offline"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "trustScore"]
+    },
+    "ExchangeSession": {
+      "title": "ExchangeSession",
+      "description": "A 1-on-1 link exchange room session between two peers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomCode": { "type": "string" },
+        "packageType": { "type": "string", "enum": ["5x5", "10x10"] },
+        "dwellTimeSeconds": { "type": "number" },
+        "status": { "type": "string", "enum": ["setup", "active", "completed", "disputed", "forfeited"] },
+        "userId": { "type": "string" },
+        "partnerId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "roomCode", "packageType", "status", "userId"]
+    },
+    "TrustLedgerEntry": {
+      "title": "TrustLedgerEntry",
+      "description": "Audit record of trust score deltas earned or penalized.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "delta": { "type": "number" },
+        "resultingScore": { "type": "number" },
+        "category": { "type": "string", "enum": ["dwell_compliance", "speed_bonus", "milestone", "penalty", "dispute", "manual_adjustment"] },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "delta", "resultingScore", "category", "reason"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile documents keyed by Firebase Auth UID."
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ExchangeSession" },
+      "description": "Exchange session documents tracking synchronized link verification rooms."
+    },
+    "/trust_ledger/{entryId}": {
+      "schema": { "$ref": "#/entities/TrustLedgerEntry" },
+      "description": "Trust score modification log entries."
+    }
+  }
+}

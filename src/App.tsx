@@ -10,7 +10,7 @@ import { ExchangeSessionPage } from './components/ExchangeSessionPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { DailyQuestsPage } from './components/DailyQuestsPage';
 import { AuthPage } from './components/AuthPage';
-import { subscribeToAuth, AuthSessionUser } from './lib/firebase';
+import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
 import { 
@@ -41,6 +41,7 @@ export default function App() {
 
   // Firebase authenticated session state
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   // User profile & online pool
   const [currentUser, setCurrentUser] = useState<User>(CURRENT_USER);
@@ -72,6 +73,18 @@ export default function App() {
     }, 4500);
   };
 
+  // Sign out handler
+  const handleSignOut = async () => {
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn('Sign out warning:', e);
+    }
+    setSessionUser(null);
+    setCurrentUser(CURRENT_USER);
+    showToast('Signed out of LinkPulse', 'info');
+  };
+
   // Trigger an initial incoming proposal for a live interactive experience after 2 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -101,6 +114,7 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = subscribeToAuth((user) => {
       setSessionUser(user);
+      setIsAuthLoading(false);
       if (user) {
         setCurrentUser(prev => ({
           ...prev,
@@ -427,6 +441,60 @@ export default function App() {
     ? ipCooldowns.find(c => c.partnerId === proposePartner.id && new Date(c.expiresAt).getTime() > Date.now())
     : null;
 
+  // Loading state while verifying Firebase Auth session
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-white flex flex-col items-center justify-center p-4 font-sans">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="h-12 w-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center animate-pulse">
+            <Shield className="h-6 w-6 text-zinc-300" strokeWidth={1.5} />
+          </div>
+          <div className="text-center space-y-1">
+            <h2 className="text-sm font-semibold text-white tracking-wide">LinkPulse</h2>
+            <p className="text-xs text-zinc-500 font-mono">Connecting to Firebase ({firebaseConfig.projectId})...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is logged out, ONLY show auth page
+  if (!sessionUser) {
+    return (
+      <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
+        {toastMessage && (
+          <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:right-6 sm:bottom-6 z-50 flex items-center space-x-2.5 rounded-lg border border-zinc-700 px-3.5 py-2.5 shadow-xl backdrop-blur-sm animate-in fade-in duration-150 max-w-sm bg-zinc-900/95 text-xs text-zinc-200">
+            {toastMessage.type === 'success' && <Check className="h-4 w-4 text-zinc-100 shrink-0" strokeWidth={2} />}
+            {toastMessage.type === 'alert' && <AlertCircle className="h-4 w-4 text-zinc-300 shrink-0" strokeWidth={1.5} />}
+            {toastMessage.type === 'info' && <Shield className="h-4 w-4 text-zinc-300 shrink-0" strokeWidth={1.5} />}
+            <p className="flex-1 font-medium">{toastMessage.text}</p>
+            <button onClick={() => setToastMessage(null)} className="text-zinc-500 hover:text-white p-1">
+              <X className="h-3.5 w-3.5" strokeWidth={1.5} />
+            </button>
+          </div>
+        )}
+        <AuthPage
+          currentUser={currentUser}
+          sessionUser={null}
+          onAuthSuccess={(user) => {
+            setSessionUser(user);
+            setCurrentUser(prev => ({
+              ...prev,
+              username: user.displayName || prev.username,
+              email: user.email || undefined,
+              avatar: user.photoURL || prev.avatar,
+              authProvider: user.providerId,
+            }));
+            showToast(`Welcome to LinkPulse, ${user.displayName || user.email}!`, 'success');
+            setActiveTab('marketplace');
+          }}
+          onSignOut={handleSignOut}
+          onNavigateToApp={() => {}}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
       
@@ -441,6 +509,7 @@ export default function App() {
         onOpenGoals={() => setActiveTab('goals')}
         onOpenLeaderboard={() => setActiveTab('leaderboard')}
         onToggleUserStatus={handleToggleUserStatus}
+        onSignOut={handleSignOut}
       />
 
       {/* Global Toast Alert */}
@@ -552,11 +621,7 @@ export default function App() {
               showToast(`Logged in as ${user.displayName || user.email}`, 'success');
               setActiveTab('marketplace');
             }}
-            onSignOut={() => {
-              setSessionUser(null);
-              setCurrentUser(CURRENT_USER);
-              showToast('Signed out of session', 'info');
-            }}
+            onSignOut={handleSignOut}
             onNavigateToApp={() => setActiveTab('marketplace')}
           />
         )}

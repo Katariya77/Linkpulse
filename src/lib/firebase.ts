@@ -11,30 +11,75 @@ import {
   Auth,
   User as FirebaseUser
 } from 'firebase/auth';
+import { 
+  getFirestore, 
+  Firestore, 
+  doc, 
+  getDocFromServer 
+} from 'firebase/firestore';
+import appletConfig from '../../firebase-applet-config.json';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+const getEnvVar = (key: string): string => {
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && (import.meta.env as Record<string, string | undefined>)[key]) {
+      return (import.meta.env as Record<string, string | undefined>)[key] || '';
+    }
+  } catch {}
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      return process.env[key] || '';
+    }
+  } catch {}
+  return '';
+};
+
+const isValidValue = (val: unknown): val is string => {
+  return typeof val === 'string' && val.trim().length > 3 && val.trim() !== '.' && !val.includes('MY_FIREBASE');
+};
+
+const resolveConfigValue = (appletVal: string | undefined, envKey: string, fallback: string = ''): string => {
+  if (isValidValue(appletVal)) return appletVal;
+  const envVal = getEnvVar(envKey);
+  if (isValidValue(envVal)) return envVal;
+  return fallback;
+};
+
+export const firebaseConfig = {
+  apiKey: resolveConfigValue(appletConfig.apiKey, 'VITE_FIREBASE_API_KEY'),
+  authDomain: resolveConfigValue(appletConfig.authDomain, 'VITE_FIREBASE_AUTH_DOMAIN', 'namefinderji.firebaseapp.com'),
+  projectId: resolveConfigValue(appletConfig.projectId, 'VITE_FIREBASE_PROJECT_ID', 'namefinderji'),
+  storageBucket: resolveConfigValue(appletConfig.storageBucket, 'VITE_FIREBASE_STORAGE_BUCKET', 'namefinderji.firebasestorage.app'),
+  messagingSenderId: resolveConfigValue(appletConfig.messagingSenderId, 'VITE_FIREBASE_MESSAGING_SENDER_ID', '395072875400'),
+  appId: resolveConfigValue(appletConfig.appId, 'VITE_FIREBASE_APP_ID', '1:395072875400:web:05b3ab8f0e6610c23a283d'),
+  firestoreDatabaseId: resolveConfigValue(appletConfig.firestoreDatabaseId, 'VITE_FIREBASE_FIRESTORE_DATABASE_ID', 'linkpulse-db'),
 };
 
 export const isFirebaseConfigured = Boolean(
-  firebaseConfig.apiKey && 
-  firebaseConfig.apiKey !== 'MY_FIREBASE_API_KEY' &&
-  firebaseConfig.projectId
+  isValidValue(firebaseConfig.apiKey) && 
+  isValidValue(firebaseConfig.projectId)
 );
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
+let db: Firestore | null = null;
 let googleProvider: GoogleAuthProvider | null = null;
 
 if (isFirebaseConfigured) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
+    
+    // Initialize Firestore with configured databaseId ('linkpulse-db')
+    try {
+      if (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') {
+        db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+      } else {
+        db = getFirestore(app);
+      }
+    } catch {
+      db = getFirestore(app);
+    }
+
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: 'select_account' });
   } catch (error) {
@@ -42,7 +87,20 @@ if (isFirebaseConfigured) {
   }
 }
 
-export { auth, googleProvider };
+// Connectivity test as recommended by Firebase integration guidelines
+if (typeof window !== 'undefined' && db) {
+  (async () => {
+    try {
+      await getDocFromServer(doc(db, 'test', 'connection'));
+    } catch (err: any) {
+      if (err instanceof Error && err.message.includes('the client is offline')) {
+        console.warn('Firebase connection notice: client is offline or initializing.');
+      }
+    }
+  })();
+}
+
+export { app, auth, db, googleProvider };
 
 export interface AuthSessionUser {
   uid: string;
@@ -53,6 +111,31 @@ export interface AuthSessionUser {
 }
 
 const LOCAL_STORAGE_USER_KEY = 'linkpulse_auth_user';
+
+const safeStorage = {
+  get: (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(key);
+      }
+    } catch {}
+    return null;
+  },
+  set: (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(key, value);
+      }
+    } catch {}
+  },
+  remove: (key: string): void => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(key);
+      }
+    } catch {}
+  },
+};
 
 export async function loginWithGoogle(): Promise<AuthSessionUser> {
   if (isFirebaseConfigured && auth && googleProvider) {
@@ -66,7 +149,7 @@ export async function loginWithGoogle(): Promise<AuthSessionUser> {
         photoURL: user.photoURL,
         providerId: 'google',
       };
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
+      safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
       return sessionUser;
     } catch (error: any) {
       console.error('Google Sign-In failed:', error);
@@ -83,7 +166,7 @@ export async function loginWithGoogle(): Promise<AuthSessionUser> {
     photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     providerId: 'google',
   };
-  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser));
+  safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser));
   return demoUser;
 }
 
@@ -103,7 +186,7 @@ export async function loginWithEmail(email: string, pass: string): Promise<AuthS
         photoURL: user.photoURL,
         providerId: 'password',
       };
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
+      safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
       return sessionUser;
     } catch (error: any) {
       console.error('Email sign-in failed:', error);
@@ -126,7 +209,7 @@ export async function loginWithEmail(email: string, pass: string): Promise<AuthS
     photoURL: null,
     providerId: 'password',
   };
-  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
+  safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
   return sessionUser;
 }
 
@@ -152,7 +235,7 @@ export async function registerWithEmail(email: string, pass: string, username?: 
         photoURL: user.photoURL,
         providerId: 'password',
       };
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
+      safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
       return sessionUser;
     } catch (error: any) {
       console.error('Email registration failed:', error);
@@ -175,7 +258,7 @@ export async function registerWithEmail(email: string, pass: string, username?: 
     photoURL: null,
     providerId: 'password',
   };
-  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
+  safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(sessionUser));
   return sessionUser;
 }
 
@@ -187,12 +270,12 @@ export async function logoutUser(): Promise<void> {
       console.warn('Firebase signOut failed:', e);
     }
   }
-  localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+  safeStorage.remove(LOCAL_STORAGE_USER_KEY);
 }
 
 export function getStoredUser(): AuthSessionUser | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+    const raw = safeStorage.get(LOCAL_STORAGE_USER_KEY);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch {
@@ -211,10 +294,10 @@ export function subscribeToAuth(callback: (user: AuthSessionUser | null) => void
           photoURL: fbUser.photoURL,
           providerId: fbUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'password',
         };
-        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+        safeStorage.set(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
         callback(user);
       } else {
-        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+        safeStorage.remove(LOCAL_STORAGE_USER_KEY);
         callback(null);
       }
     });

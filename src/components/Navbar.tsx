@@ -17,7 +17,8 @@ import {
   Sparkles,
   ChevronRight,
   KeyRound,
-  LogIn
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { User } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
@@ -32,6 +33,7 @@ interface NavbarProps {
   onOpenGoals: () => void;
   onOpenLeaderboard: () => void;
   onToggleUserStatus: () => void;
+  onSignOut?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -44,19 +46,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenGoals,
   onOpenLeaderboard,
   onToggleUserStatus,
+  onSignOut,
 }) => {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const trustInfo = getTrustTier(currentUser.trustScore);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
+    if (typeof document === 'undefined' || !document.body) return;
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
     return () => {
-      document.body.style.overflow = '';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.style.overflow = '';
+      }
     };
   }, [isMobileMenuOpen]);
 
@@ -245,6 +256,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
+          {onSignOut && (
+            <button
+              id="header-signout-btn"
+              onClick={onSignOut}
+              title="Sign Out of LinkPulse"
+              className="hidden sm:flex items-center space-x-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+            >
+              <LogOut className="h-3 w-3 text-zinc-400" strokeWidth={1.5} />
+              <span className="text-[11px]">Sign Out</span>
+            </button>
+          )}
+
           {/* Trust Score Pill */}
           <button
             id="trust-score-badge-btn"
@@ -323,7 +346,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* FULL SCREEN SIDEBAR / MOBILE & TABLET NAVIGATION HUB PORTAL */}
-      {typeof document !== 'undefined' && createPortal(
+      {mounted && typeof document !== 'undefined' && Boolean(document.body) && createPortal(
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div
@@ -457,8 +480,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                     })}
                   </div>
 
-                  {/* Bottom Quick Dismiss (Node profile section removed as requested) */}
-                  <div className="pt-4 border-t border-zinc-800/80">
+                  {/* Bottom Actions */}
+                  <div className="pt-4 border-t border-zinc-800/80 space-y-2">
+                    {onSignOut && (
+                      <button
+                        type="button"
+                        id="sidebar-signout-btn"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          onSignOut();
+                        }}
+                        className="w-full py-2.5 rounded-xl text-center text-sm font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/40 transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Sign Out of LinkPulse</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       id="sidebar-close-footer-btn"
