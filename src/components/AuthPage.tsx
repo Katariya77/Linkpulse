@@ -74,12 +74,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setErrorMessage(null);
     setSuccessNotice(null);
 
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
       setErrorMessage('Please enter both email and password.');
       return;
     }
 
-    if (mode === 'signup' && password.length < 6) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setErrorMessage('Please enter a valid email address (e.g. name@example.com).');
+      return;
+    }
+
+    if (mode === 'signup' && cleanPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
@@ -89,10 +98,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       let user: AuthSessionUser;
       if (mode === 'signin') {
-        user = await loginWithEmail(email.trim(), password);
+        user = await loginWithEmail(cleanEmail, cleanPassword);
         setSuccessNotice(`Welcome back, ${user.displayName || user.email}!`);
       } else {
-        user = await registerWithEmail(email.trim(), password, username.trim() || undefined);
+        user = await registerWithEmail(cleanEmail, cleanPassword, username.trim() || undefined);
         setSuccessNotice(`Account created successfully! Welcome, ${user.displayName || user.email}!`);
       }
       onAuthSuccess(user);
@@ -135,10 +144,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </h1>
           <p className="text-xs sm:text-sm text-zinc-400">
             {sessionUser 
-              ? 'Your authenticated session is active and linked to the peer network.'
+              ? 'Your account is active and connected to the link exchange community.'
               : mode === 'signin'
-              ? 'Sign in to access synchronized peer rooms and exchange telemetry.'
-              : 'Join the decentralized link exchange network with instant peer matching.'}
+              ? 'Sign in to access live exchange rooms and start trading shortlinks.'
+              : 'Join the community to exchange shortlinks and grow verified clicks safely.'}
           </p>
         </div>
 
@@ -180,7 +189,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400 truncate">
-                  {sessionUser.email || `${currentUser.username.toLowerCase()}@peer.network`}
+                  {sessionUser.email || `${currentUser.username.toLowerCase()}@member.linkpulse.io`}
                 </p>
                 <div className="flex items-center space-x-2 pt-1 text-[11px] text-zinc-500">
                   <span>Trust Score: <strong className="text-zinc-300">{currentUser.trustScore}/100</strong></span>
@@ -306,14 +315,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {mode === 'signup' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-zinc-300 block">
-                    Peer Username
+                    Username
                   </label>
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
                     <input
                       id="auth-username-input"
                       type="text"
-                      placeholder="node_peer_99"
+                      placeholder="e.g. alex99"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-zinc-600 focus:outline-none text-xs sm:text-sm text-white placeholder-zinc-600 transition-colors"
@@ -399,7 +408,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setEmail('demo.peer@linkpulse.io');
+                  setEmail('demo@linkpulse.io');
                   setPassword('pulse12345');
                 }}
                 className="text-zinc-400 hover:text-white underline cursor-pointer"

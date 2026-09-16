@@ -57,9 +57,10 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
   // Calculate user standing
   const globalSortedByTrust = [...allUsers].sort((a, b) => b.trustScore - a.trustScore);
   const userRank = globalSortedByTrust.findIndex(u => u.id === currentUser.id) + 1;
-  const topUser = globalSortedByTrust[0];
-  const avgTrust = Math.round(allUsers.reduce((sum, u) => sum + u.trustScore, 0) / allUsers.length);
+  const topUser = globalSortedByTrust[0] || currentUser;
+  const avgTrust = allUsers.length > 0 ? Math.round(allUsers.reduce((sum, u) => sum + u.trustScore, 0) / allUsers.length) : 100;
   const totalSwaps = allUsers.reduce((sum, u) => sum + u.lifetimeExchanges, 0);
+  const avgVerifiedRate = allUsers.length > 0 ? (allUsers.reduce((sum, u) => sum + u.successRate, 0) / allUsers.length).toFixed(1) : '100';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 w-full">
@@ -76,7 +77,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
                 Reputation Leaderboard
               </h1>
               <p className="text-xs text-zinc-400">
-                Real-time algorithmic rank of verified P2P traffic network nodes
+                Live community rankings of verified link exchange members
               </p>
             </div>
           </div>
@@ -101,7 +102,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-zinc-400">Your Standing</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded border border-zinc-700 bg-zinc-800 text-zinc-300">
-              Node #{userRank}
+              Rank #{userRank}
             </span>
           </div>
           <div className="flex items-baseline space-x-2">
@@ -122,7 +123,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
         {/* Top Node */}
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Top Verified Node</span>
+            <span className="text-xs font-medium text-zinc-400">Top Ranked Member</span>
             <span className="text-[10px] px-1.5 py-0.2 rounded border border-emerald-900/40 bg-emerald-950/40 text-emerald-400">
               Rank #1
             </span>
@@ -148,7 +149,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
         {/* Network Metrics */}
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-zinc-400">Network Telemetry</span>
+            <span className="text-xs font-medium text-zinc-400">Community Stats</span>
             <Users className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
           </div>
           <div className="flex items-baseline space-x-2">
@@ -162,7 +163,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
             <span>•</span>
             <span className="flex items-center gap-1 text-emerald-400">
               <CheckCircle2 className="h-3 w-3" />
-              99.2% Verified Rate
+              {avgVerifiedRate}% Verified Rate
             </span>
           </div>
         </div>
@@ -229,7 +230,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search node or country..."
+            placeholder="Search member or country..."
             className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-1.5 pl-8 pr-3 text-xs text-zinc-200 placeholder-zinc-500 focus:border-zinc-700 focus:outline-none"
           />
         </div>
@@ -242,7 +243,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-950/80 text-zinc-400 font-medium">
                 <th className="py-3 px-2 sm:px-4 w-12 sm:w-16 text-center">Rank</th>
-                <th className="py-3 px-2.5 sm:px-4">Node / Username</th>
+                <th className="py-3 px-2.5 sm:px-4">Member / Username</th>
                 <th className="hidden sm:table-cell py-3 px-3 sm:px-4">Country</th>
                 <th className="hidden md:table-cell py-3 px-3 sm:px-4">Trust Tier</th>
                 <th className="py-3 px-2.5 sm:px-4">Trust Score</th>
@@ -381,7 +382,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
                           Exchange
                         </button>
                       ) : isSelf ? (
-                        <span className="text-xs text-zinc-500 font-medium">Your Node</span>
+                        <span className="text-xs text-zinc-500 font-medium">You</span>
                       ) : (
                         <span className="text-xs text-zinc-600">Unavailable</span>
                       )}
@@ -400,7 +401,7 @@ export const LeaderboardPage: React.FC<LeaderboardPageProps> = ({
           <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
           Rankings are updated continuously after every verified exchange session.
         </span>
-        <span>Displaying {sortedUsers.length} nodes</span>
+        <span>Displaying {sortedUsers.length} members</span>
       </div>
 
     </div>

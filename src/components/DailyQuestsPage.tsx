@@ -35,24 +35,24 @@ export const DailyQuestsPage: React.FC<DailyQuestsPageProps> = ({
   const LONG_TERM_MILESTONES = [
     {
       id: 'm1',
-      title: 'Flawless Verification Node',
+      title: 'Flawless Exchange Partner',
       description: 'Achieve 10 consecutive exchange rooms without any dispute flags or skips.',
-      progress: '10/10',
-      unlocked: true,
+      progress: `${Math.min(10, currentUser.lifetimeExchanges)}/10`,
+      unlocked: currentUser.lifetimeExchanges >= 10,
       reward: 'Verified Badge',
     },
     {
       id: 'm2',
-      title: 'Retention Guardian',
+      title: 'High Retention Swapper',
       description: 'Complete 25 links with 45-second high-dwell duration.',
-      progress: '18/25',
-      unlocked: false,
+      progress: `${Math.min(25, currentUser.lifetimeExchanges * 5)}/25`,
+      unlocked: (currentUser.lifetimeExchanges * 5) >= 25,
       reward: '+5 Trust Bonus',
     },
     {
       id: 'm3',
       title: 'Centurion Exchanger',
-      description: 'Reach 100 lifetime mutual link verifications on the network.',
+      description: 'Reach 100 lifetime verified link exchanges in the community.',
       progress: `${currentUser.lifetimeExchanges}/100`,
       unlocked: currentUser.lifetimeExchanges >= 100,
       reward: 'Elite Priority',
@@ -181,7 +181,7 @@ export const DailyQuestsPage: React.FC<DailyQuestsPageProps> = ({
               ({completedCount} of {goals.length} ready)
             </span>
           </h2>
-          <span className="text-xs text-zinc-500">Auto-tracked via exchange telemetry</span>
+          <span className="text-xs text-zinc-500">Automatically tracked as you complete swaps</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -53,7 +53,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
                 Reputation Leaderboard
               </h2>
               <p className="text-xs text-zinc-400">
-                Ranked by algorithmic trust and retention verification
+                Ranked by trust score and verified exchange history
               </p>
             </div>
           </div>

@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { ExchangeSession, User, PackageType } from '../types';
 import { ExchangeRoom } from './ExchangeRoom';
-import { DEFAULT_USER_LINKS_5, DEFAULT_USER_LINKS_10 } from '../data/mockData';
 import { getTrustTier } from '../utils/trustUtils';
 
 interface ExchangeSessionPageProps {
@@ -114,7 +113,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
 }) => {
   const [packageType, setPackageType] = useState<PackageType>('5x5');
   const [dwellTime, setDwellTime] = useState<number>(30);
-  const [links, setLinks] = useState<string[]>(DEFAULT_USER_LINKS_5);
+  const [links, setLinks] = useState<string[]>(Array(5).fill(''));
   const [note, setNote] = useState<string>('Ready for synchronized exchange. Verified clean shortener links.');
 
   const partnerTrust = getTrustTier(partner.trustScore);
@@ -124,9 +123,9 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
     if (type === '10x10' && !is10x10Allowed) return;
     setPackageType(type);
     if (type === '5x5') {
-      setLinks(DEFAULT_USER_LINKS_5);
+      setLinks(Array(5).fill(''));
     } else {
-      setLinks(DEFAULT_USER_LINKS_10);
+      setLinks(Array(10).fill(''));
     }
   };
 
@@ -153,7 +152,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
               Configure Exchange Session
             </h1>
             <p className="text-xs text-zinc-400">
-              Synchronized 1-on-1 traffic verification handshake with @{partner.username}
+              1-on-1 link exchange with @{partner.username}
             </p>
           </div>
         </div>
@@ -173,9 +172,9 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
         <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 p-4 flex items-start space-x-3 text-xs">
           <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" strokeWidth={1.5} />
           <div>
-            <h4 className="font-semibold text-amber-200 text-sm">24-Hour IP Pair Cooldown Active</h4>
+            <h4 className="font-semibold text-amber-200 text-sm">24-Hour Exchange Cooldown Active</h4>
             <p className="text-zinc-300 mt-1 leading-relaxed">
-              Mutual exchanges between your IP ({currentUser.ipAddress}) and {partner.username}&apos;s IP ({partner.ipAddress}) are limited to once every 24 hours to prevent ad network invalid traffic invalidation.
+              Exchanges between your IP and {partner.username}&apos;s IP are limited to once every 24 hours to ensure high quality and protect shortener stats.
             </p>
             <div className="mt-2 text-zinc-200 font-medium">
               Time Remaining: <span className="tabular-nums font-mono text-amber-300">{cooldownRemainingFormatted || 'Active'}</span>
@@ -190,7 +189,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
         {/* Left 2 Columns: Package & URLs */}
         <div className="lg:col-span-2 space-y-5">
           
-          {/* Partner Telemetry Card */}
+          {/* Partner Info Card */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <img
@@ -250,7 +249,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  5 links per peer • ~3 minutes estimated duration
+                  5 links each • ~3 minutes estimated duration
                 </p>
               </button>
 
@@ -274,7 +273,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  10 links per peer • ~6 minutes estimated duration
+                  10 links each • ~6 minutes estimated duration
                 </p>
               </button>
             </div>
@@ -327,11 +326,11 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
               </label>
               <button
                 type="button"
-                onClick={() => setLinks(packageType === '5x5' ? DEFAULT_USER_LINKS_5 : DEFAULT_USER_LINKS_10)}
+                onClick={() => setLinks(Array(targetCount).fill(''))}
                 className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
               >
                 <RotateCcw className="h-3 w-3" />
-                <span>Reset Defaults</span>
+                <span>Clear Inputs</span>
               </button>
             </div>
 
@@ -360,7 +359,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
           {/* Note */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-zinc-300 block">
-              Handshake Note (Optional)
+              Message / Note for Partner (Optional)
             </label>
             <input
               type="text"
@@ -537,28 +536,36 @@ const ExchangeSessionHub: React.FC<ExchangeSessionHubProps> = ({
             </h2>
             
             <p className="text-xs text-zinc-400 leading-relaxed max-w-xl">
-              Exchange rooms isolate IP pairs and synchronize link verification in real-time. Choose an online peer below or enter an invite code to begin.
+              Exchange rooms let you trade shortlinks 1-on-1 and verify clicks together in real time. Choose an online member below or enter an invite code to begin.
             </p>
           </div>
 
-          {/* Quick Match with Online Nodes */}
+          {/* Quick Match with Online Members */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-white flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5 text-zinc-400" />
-                <span>Instant Match Online Peers ({eligiblePeers.length} ready)</span>
+                <span>Online Members Ready to Exchange ({eligiblePeers.length})</span>
               </h3>
               <span className="text-[11px] text-zinc-500">Verified IP clean</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {eligiblePeers.slice(0, 4).map((peer) => {
-                const tier = getTrustTier(peer.trustScore);
-                return (
-                  <div
-                    key={peer.id}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3.5 flex items-center justify-between hover:border-zinc-700 transition-colors"
-                  >
+            {eligiblePeers.length === 0 ? (
+              <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/20 p-6 text-center text-xs text-zinc-400 space-y-1">
+                <p className="text-zinc-300 font-medium">No other members online right now</p>
+                <p className="text-zinc-500">
+                  You are the first active user online. Share LinkPulse with a friend or test with another account to start a live exchange room.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {eligiblePeers.slice(0, 4).map((peer) => {
+                  const tier = getTrustTier(peer.trustScore);
+                  return (
+                    <div
+                      key={peer.id}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3.5 flex items-center justify-between hover:border-zinc-700 transition-colors"
+                    >
                     <div className="flex items-center space-x-2.5">
                       <img
                         src={peer.avatar}
@@ -590,7 +597,8 @@ const ExchangeSessionHub: React.FC<ExchangeSessionHubProps> = ({
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
 
         </div>
@@ -609,7 +617,7 @@ const ExchangeSessionHub: React.FC<ExchangeSessionHubProps> = ({
             </div>
             
             <p className="text-xs text-zinc-400">
-              Have a 6-character room code from a partner handshake?
+              Have a 6-character room code from an exchange partner?
             </p>
 
             <div className="space-y-1.5">

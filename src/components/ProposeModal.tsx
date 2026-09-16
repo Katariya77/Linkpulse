@@ -9,7 +9,6 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import { User, PackageType } from '../types';
-import { DEFAULT_USER_LINKS_5, DEFAULT_USER_LINKS_10 } from '../data/mockData';
 import { getTrustTier } from '../utils/trustUtils';
 
 interface ProposeModalProps {
@@ -31,7 +30,7 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
 }) => {
   const [packageType, setPackageType] = useState<PackageType>('5x5');
   const [dwellTime, setDwellTime] = useState<number>(30);
-  const [links, setLinks] = useState<string[]>(DEFAULT_USER_LINKS_5);
+  const [links, setLinks] = useState<string[]>(Array(5).fill(''));
   const [note, setNote] = useState<string>('Ready for instant exchange! Clean links.');
   
   const partnerTrust = getTrustTier(partner.trustScore);
@@ -41,9 +40,9 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
     if (type === '10x10' && !is10x10Allowed) return;
     setPackageType(type);
     if (type === '5x5') {
-      setLinks(DEFAULT_USER_LINKS_5);
+      setLinks(Array(5).fill(''));
     } else {
-      setLinks(DEFAULT_USER_LINKS_10);
+      setLinks(Array(10).fill(''));
     }
   };
 
@@ -73,7 +72,7 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
                 Propose Exchange Session
               </h2>
               <p className="text-xs text-zinc-400">
-                Peer handshake with <span className="text-zinc-200">@{partner.username}</span>
+                1-on-1 link swap with <span className="text-zinc-200">@{partner.username}</span>
               </p>
             </div>
           </div>
@@ -94,9 +93,9 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
             <div className="rounded-md border border-zinc-700 bg-zinc-950 p-3 flex items-start space-x-2.5 text-xs">
               <AlertCircle className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" strokeWidth={1.5} />
               <div>
-                <h4 className="font-semibold text-zinc-200">24-Hour IP Cooldown Active</h4>
+                <h4 className="font-semibold text-zinc-200">24-Hour Cooldown Active</h4>
                 <p className="text-zinc-400 mt-0.5 leading-relaxed">
-                  Mutual exchanges between this pair are limited to once every 24 hours to protect ad network CPMs.
+                  Exchanges between this partner are limited to once every 24 hours to maintain high link quality and protect earnings.
                 </p>
                 <div className="mt-1 text-zinc-300">
                   Remaining: <span className="tabular-nums font-mono text-xs">{cooldownRemainingFormatted || 'Active'}</span>
@@ -105,7 +104,7 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
             </div>
           )}
 
-          {/* Partner Quick Telemetry */}
+          {/* Partner Info */}
           <div className="flex items-center justify-between p-3 rounded-md bg-zinc-950 border border-zinc-800">
             <div className="flex items-center space-x-3">
               <img
@@ -220,10 +219,10 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
               </label>
               <button
                 type="button"
-                onClick={() => setLinks(packageType === '5x5' ? DEFAULT_USER_LINKS_5 : DEFAULT_USER_LINKS_10)}
+                onClick={() => setLinks(Array(targetCount).fill(''))}
                 className="text-xs text-zinc-400 hover:text-white underline"
               >
-                Reset Defaults
+                Clear
               </button>
             </div>
 
@@ -248,7 +247,7 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
           {/* Quick Note */}
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1">
-              Handshake Note (Optional)
+              Message / Note for Partner (Optional)
             </label>
             <input
               type="text"

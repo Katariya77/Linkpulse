@@ -47,6 +47,21 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "userId", "delta", "resultingScore", "category", "reason"]
+    },
+    "IPCooldownRecord": {
+      "title": "IPCooldownRecord",
+      "description": "Cooldown record preventing duplicate exchanges with the same partner IP within the cooldown window.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "partnerId": { "type": "string" },
+        "partnerUsername": { "type": "string" },
+        "partnerIp": { "type": "string" },
+        "initiatedAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "partnerId", "expiresAt"]
     }
   },
   "firestore": {
@@ -61,6 +76,10 @@
     "/trust_ledger/{entryId}": {
       "schema": { "$ref": "#/entities/TrustLedgerEntry" },
       "description": "Trust score modification log entries."
+    },
+    "/cooldowns/{cooldownId}": {
+      "schema": { "$ref": "#/entities/IPCooldownRecord" },
+      "description": "Cooldown tracking per user and partner."
     }
   }
 }

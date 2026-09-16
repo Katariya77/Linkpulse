@@ -178,32 +178,38 @@ export const TrustInspectorModal: React.FC<TrustInspectorModalProps> = ({
               Score History Ledger
             </h3>
             <div className="rounded border border-zinc-800 bg-zinc-950 divide-y divide-zinc-800/80 overflow-hidden">
-              {ledger.map((entry) => (
-                <div key={entry.id} className="p-2.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-2.5">
-                    <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
-                      {entry.delta > 0 ? (
-                        <TrendingUp className="h-3 w-3" strokeWidth={1.5} />
-                      ) : (
-                        <TrendingDown className="h-3 w-3" strokeWidth={1.5} />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-zinc-200 font-medium">{entry.reason}</p>
-                      <p className="text-[10px] text-zinc-500">
-                        {entry.timestamp} {entry.sessionRef && `• ${entry.sessionRef}`}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <span className={`font-semibold tabular-nums ${entry.delta > 0 ? 'text-zinc-100' : 'text-zinc-400'}`}>
-                      {entry.delta > 0 ? `+${entry.delta}` : entry.delta} PTS
-                    </span>
-                    <p className="text-[10px] text-zinc-500 tabular-nums">Result: {entry.resultingScore}</p>
-                  </div>
+              {ledger.length === 0 ? (
+                <div className="p-4 text-center text-xs text-zinc-500">
+                  No score adjustments logged yet. Clean initial baseline score: 100 PTS.
                 </div>
-              ))}
+              ) : (
+                ledger.map((entry) => (
+                  <div key={entry.id} className="p-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-zinc-300 border border-zinc-800">
+                        {entry.delta > 0 ? (
+                          <TrendingUp className="h-3 w-3" strokeWidth={1.5} />
+                        ) : (
+                          <TrendingDown className="h-3 w-3" strokeWidth={1.5} />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-zinc-200 font-medium">{entry.reason}</p>
+                        <p className="text-[10px] text-zinc-500">
+                          {entry.timestamp} {entry.sessionRef && `• ${entry.sessionRef}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className={`font-semibold tabular-nums ${entry.delta > 0 ? 'text-zinc-100' : 'text-zinc-400'}`}>
+                        {entry.delta > 0 ? `+${entry.delta}` : entry.delta} PTS
+                      </span>
+                      <p className="text-[10px] text-zinc-500 tabular-nums">Result: {entry.resultingScore}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

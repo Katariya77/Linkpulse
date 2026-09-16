@@ -171,18 +171,21 @@ export async function loginWithGoogle(): Promise<AuthSessionUser> {
 }
 
 export async function loginWithEmail(email: string, pass: string): Promise<AuthSessionUser> {
-  if (!email || !pass) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPass = pass || '';
+
+  if (!cleanEmail || !cleanPass) {
     throw new Error('Please enter both email and password.');
   }
 
   if (isFirebaseConfigured && auth) {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, pass);
+      const result = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
       const user = result.user;
       const sessionUser: AuthSessionUser = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || email.split('@')[0],
+        displayName: user.displayName || cleanEmail.split('@')[0],
         photoURL: user.photoURL,
         providerId: 'password',
       };
@@ -190,6 +193,9 @@ export async function loginWithEmail(email: string, pass: string): Promise<AuthS
       return sessionUser;
     } catch (error: any) {
       console.error('Email sign-in failed:', error);
+      if (error.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address (e.g. name@example.com).');
+      }
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
         throw new Error('Invalid email or password.');
       }
@@ -204,8 +210,8 @@ export async function loginWithEmail(email: string, pass: string): Promise<AuthS
   await new Promise((resolve) => setTimeout(resolve, 500));
   const sessionUser: AuthSessionUser = {
     uid: `email_user_${Date.now()}`,
-    email,
-    displayName: email.split('@')[0],
+    email: cleanEmail,
+    displayName: cleanEmail.split('@')[0],
     photoURL: null,
     providerId: 'password',
   };
@@ -214,24 +220,33 @@ export async function loginWithEmail(email: string, pass: string): Promise<AuthS
 }
 
 export async function registerWithEmail(email: string, pass: string, username?: string): Promise<AuthSessionUser> {
-  if (!email || !pass) {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPass = pass || '';
+
+  if (!cleanEmail || !cleanPass) {
     throw new Error('Please provide email and password.');
   }
-  if (pass.length < 6) {
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleanEmail)) {
+    throw new Error('Please enter a valid email address (e.g. name@example.com).');
+  }
+
+  if (cleanPass.length < 6) {
     throw new Error('Password must be at least 6 characters long.');
   }
 
   if (isFirebaseConfigured && auth) {
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, pass);
+      const result = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
       const user = result.user;
       if (username) {
-        await updateProfile(user, { displayName: username });
+        await updateProfile(user, { displayName: username.trim() });
       }
       const sessionUser: AuthSessionUser = {
         uid: user.uid,
         email: user.email,
-        displayName: username || user.displayName || email.split('@')[0],
+        displayName: username?.trim() || user.displayName || cleanEmail.split('@')[0],
         photoURL: user.photoURL,
         providerId: 'password',
       };
@@ -239,6 +254,9 @@ export async function registerWithEmail(email: string, pass: string, username?: 
       return sessionUser;
     } catch (error: any) {
       console.error('Email registration failed:', error);
+      if (error.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address (e.g. name@example.com).');
+      }
       if (error.code === 'auth/email-already-in-use') {
         throw new Error('An account with this email already exists.');
       }
@@ -253,8 +271,8 @@ export async function registerWithEmail(email: string, pass: string, username?: 
   await new Promise((resolve) => setTimeout(resolve, 500));
   const sessionUser: AuthSessionUser = {
     uid: `email_user_${Date.now()}`,
-    email,
-    displayName: username || email.split('@')[0],
+    email: cleanEmail,
+    displayName: username?.trim() || cleanEmail.split('@')[0],
     photoURL: null,
     providerId: 'password',
   };

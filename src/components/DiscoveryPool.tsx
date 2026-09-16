@@ -145,8 +145,10 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
             <Users className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
           </div>
           <div className="mt-1.5 flex items-baseline space-x-2">
-            <span className="text-xl font-semibold text-white tabular-nums">48</span>
-            <span className="text-xs text-zinc-400">nodes active</span>
+            <span className="text-xl font-semibold text-white tabular-nums">
+              {safePeers.length}
+            </span>
+            <span className="text-xs text-zinc-400">peers active</span>
           </div>
         </div>
 
@@ -156,8 +158,12 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
             <Shield className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
           </div>
           <div className="mt-1.5 flex items-baseline space-x-2">
-            <span className="text-xl font-semibold text-white tabular-nums">99.1%</span>
-            <span className="text-xs text-zinc-400">verified</span>
+            <span className="text-xl font-semibold text-white tabular-nums">
+              {currentUser.lifetimeExchanges > 0 ? `${currentUser.successRate}%` : '100%'}
+            </span>
+            <span className="text-xs text-zinc-400">
+              {currentUser.lifetimeExchanges > 0 ? `${currentUser.lifetimeExchanges} swaps` : 'verified'}
+            </span>
           </div>
         </div>
 
@@ -206,12 +212,13 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
-              id="simulate-incoming-proposal-btn"
+              id="instant-match-broadcast-btn"
               onClick={onSimulateIncomingProposal}
               className="flex items-center justify-center space-x-1.5 rounded-md border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors"
+              title="Broadcast an instant match request to online peers via Firebase"
             >
               <Zap className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>Simulate Peer Invite</span>
+              <span>Instant Match & Broadcast</span>
             </button>
 
             <div className="relative w-full sm:w-52">
@@ -278,7 +285,19 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
 
         {/* Peer Table List */}
         <div className="divide-y divide-zinc-800/60">
-          {filteredPeers.length === 0 ? (
+          {safePeers.length === 0 ? (
+            <div className="p-12 text-center space-y-3">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400">
+                <Users className="h-5 w-5" strokeWidth={1.5} />
+              </div>
+              <div className="space-y-1 max-w-md mx-auto">
+                <h3 className="text-sm font-semibold text-white">No other peers registered yet</h3>
+                <p className="text-xs text-zinc-400">
+                  You are currently the only active account connected to LinkPulse. Real-time Firebase listeners are connected. When another peer creates an account and logs in, they will immediately appear in this discovery pool.
+                </p>
+              </div>
+            </div>
+          ) : filteredPeers.length === 0 ? (
             <div className="p-8 text-center text-zinc-500 text-xs">
               No matching peers found for current filter.
             </div>

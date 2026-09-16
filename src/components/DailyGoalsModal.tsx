@@ -123,7 +123,7 @@ export const DailyGoalsModal: React.FC<DailyGoalsModalProps> = ({
 
         {/* Footer */}
         <div className="border-t border-zinc-800 bg-zinc-900 px-5 py-3 flex justify-between items-center text-xs text-zinc-500">
-          <span>Telemetry tracked automatically</span>
+          <span>Tracked automatically as you complete swaps</span>
           <button
             onClick={onClose}
             className="rounded bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 text-xs font-medium"

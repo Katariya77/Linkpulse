@@ -24,16 +24,38 @@ import {
   PackageType 
 } from './types';
 import { 
-  CURRENT_USER, 
-  INITIAL_PEERS, 
-  INITIAL_TRUST_LEDGER, 
-  INITIAL_IP_COOLDOWNS, 
-  INITIAL_DAILY_GOALS,
-  DEFAULT_USER_LINKS_5,
-  DEFAULT_USER_LINKS_10
-} from './data/mockData';
+  syncUserProfile, 
+  updateUserProfileInFirestore, 
+  subscribeToPeers, 
+  subscribeToTrustLedger, 
+  addTrustLedgerEntryInFirestore,
+  subscribeToIncomingProposals,
+  sendExchangeProposalToFirestore,
+  subscribeToExchangeSession,
+  updateSessionInFirestore,
+  subscribeToCooldowns,
+  addCooldownInFirestore,
+  cleanupMockDataFromFirestore,
+  REAL_INITIAL_GOALS
+} from './lib/firestoreService';
 import { extractDomain, formatTimeRemaining } from './utils/trustUtils';
 import { ShieldCheck, Check, AlertCircle, Sparkles, X, Shield } from 'lucide-react';
+
+const INITIAL_FALLBACK_USER: User = {
+  id: 'guest_user',
+  username: 'Visiting Peer',
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  onlineStatus: 'online',
+  trustScore: 100,
+  successRate: 100,
+  lifetimeExchanges: 0,
+  activeStreak: 1,
+  preferredShorteners: ['shrinkme.io', 'ouo.io'],
+  ipAddress: '192.0.2.84',
+  country: 'United States',
+  countryCode: 'US',
+  joinedDate: 'Today',
+};
 
 export default function App() {
   // Navigation tab
@@ -43,12 +65,12 @@ export default function App() {
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
-  // User profile & online pool
-  const [currentUser, setCurrentUser] = useState<User>(CURRENT_USER);
-  const [peers, setPeers] = useState<User[]>(INITIAL_PEERS);
-  const [ipCooldowns, setIpCooldowns] = useState<IPCooldownRecord[]>(INITIAL_IP_COOLDOWNS);
-  const [trustLedger, setTrustLedger] = useState<TrustLedgerEntry[]>(INITIAL_TRUST_LEDGER);
-  const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(INITIAL_DAILY_GOALS);
+  // User profile & online pool (synced with Firebase Firestore in real time)
+  const [currentUser, setCurrentUser] = useState<User>(INITIAL_FALLBACK_USER);
+  const [peers, setPeers] = useState<User[]>([]);
+  const [ipCooldowns, setIpCooldowns] = useState<IPCooldownRecord[]>([]);
+  const [trustLedger, setTrustLedger] = useState<TrustLedgerEntry[]>([]);
+  const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(REAL_INITIAL_GOALS);
 
   // Active exchange session (if any)
   const [activeSession, setActiveSession] = useState<ExchangeSession | null>(null);
@@ -56,7 +78,7 @@ export default function App() {
   // Proposal modal state
   const [proposePartner, setProposePartner] = useState<User | null>(null);
 
-  // Incoming simulated proposal
+  // Incoming proposal (real-time Firestore synced)
   const [incomingProposal, setIncomingProposal] = useState<ExchangeProposal | null>(null);
 
   // Modals state
@@ -81,77 +103,103 @@ export default function App() {
       console.warn('Sign out warning:', e);
     }
     setSessionUser(null);
-    setCurrentUser(CURRENT_USER);
+    setCurrentUser(INITIAL_FALLBACK_USER);
     showToast('Signed out of LinkPulse', 'info');
   };
 
-  // Trigger an initial incoming proposal for a live interactive experience after 2 seconds
+  // Real-time Firestore synchronization for Auth, User Profile, Peers, Trust Ledger, Proposals, and Cooldowns
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const prospectivePartner = peers.find(p => p.id === 'usr_peer_02'); // TrafficNinja
-      if (prospectivePartner && !activeSession) {
-        setIncomingProposal({
-          id: 'prop_init_01',
-          sender: prospectivePartner,
-          packageType: '5x5',
-          dwellTime: 30,
-          senderLinks: [
-            'https://ouo.io/98hX2a',
-            'https://ouo.io/kL4910',
-            'https://gplinks.co/best-vpn-2025',
-            'https://ouo.io/qW810z',
-            'https://gplinks.co/game-patch-update',
-          ],
-          createdAt: new Date().toISOString(),
-          note: 'Hey! Ready for an instant 5x5 exchange. Clean links!',
-        });
-      }
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Listen for Firebase Auth session changes
-  useEffect(() => {
-    const unsubscribe = subscribeToAuth((user) => {
+    const unsubAuth = subscribeToAuth((user) => {
       setSessionUser(user);
       setIsAuthLoading(false);
-      if (user) {
-        setCurrentUser(prev => ({
-          ...prev,
-          username: user.displayName || prev.username,
-          email: user.email || undefined,
-          avatar: user.photoURL || prev.avatar,
-          authProvider: user.providerId,
-        }));
-      }
     });
-    return () => unsubscribe();
+    return () => unsubAuth();
   }, []);
 
-  // Update Trust Score helper
+  // Listen to User Profile when authenticated
+  useEffect(() => {
+    if (!sessionUser) return;
+    cleanupMockDataFromFirestore();
+    const unsubUser = syncUserProfile(sessionUser, (profile) => {
+      setCurrentUser(profile);
+    });
+    return () => unsubUser();
+  }, [sessionUser]);
+
+  // Listen to Peers collection in real time
+  useEffect(() => {
+    const activeUid = sessionUser ? sessionUser.uid : '';
+    const unsubPeers = subscribeToPeers(activeUid, (livePeers) => {
+      setPeers(livePeers);
+    });
+    return () => unsubPeers();
+  }, [sessionUser]);
+
+  // Listen to Trust Ledger in real time
+  useEffect(() => {
+    if (!sessionUser) return;
+    const unsubLedger = subscribeToTrustLedger(sessionUser.uid, (entries) => {
+      setTrustLedger(entries);
+    });
+    return () => unsubLedger();
+  }, [sessionUser]);
+
+  // Listen to incoming proposals in real time from Firestore
+  useEffect(() => {
+    if (!sessionUser) return;
+    const unsubProposals = subscribeToIncomingProposals(sessionUser.uid, (prop) => {
+      setIncomingProposal(prop);
+    });
+    return () => unsubProposals();
+  }, [sessionUser]);
+
+  // Listen to IP cooldowns in real time from Firestore
+  useEffect(() => {
+    if (!sessionUser) return;
+    const unsubCooldowns = subscribeToCooldowns(sessionUser.uid, (cooldowns) => {
+      setIpCooldowns(cooldowns);
+    });
+    return () => unsubCooldowns();
+  }, [sessionUser]);
+
+  // Listen to Active Session in real time if active
+  useEffect(() => {
+    if (!activeSession?.id) return;
+    const unsubSession = subscribeToExchangeSession(activeSession.id, (updated) => {
+      if (updated) {
+        setActiveSession(prev => prev ? { ...prev, ...updated } : updated);
+      }
+    });
+    return () => unsubSession();
+  }, [activeSession?.id]);
+
+  // Update Trust Score helper (persisting to Firestore)
   const applyTrustDelta = (
     delta: number, 
     reason: string, 
     category: TrustLedgerEntry['category'], 
     sessionRef?: string
   ) => {
-    setCurrentUser(prev => {
-      const newScore = Math.max(0, Math.min(100, prev.trustScore + delta));
-      const newEntry: TrustLedgerEntry = {
-        id: `t_${Date.now()}`,
-        timestamp: 'Just now',
-        delta,
-        resultingScore: newScore,
-        reason,
-        category,
-        sessionRef,
-      };
-      setTrustLedger(l => [newEntry, ...l]);
-      return {
-        ...prev,
-        trustScore: newScore,
-      };
-    });
+    const newScore = Math.max(0, Math.min(100, currentUser.trustScore + delta));
+    const newEntry: TrustLedgerEntry = {
+      id: `t_${Date.now()}`,
+      timestamp: 'Just now',
+      delta,
+      resultingScore: newScore,
+      reason,
+      category,
+      sessionRef,
+    };
+
+    setTrustLedger(l => [newEntry, ...l]);
+    setCurrentUser(prev => ({
+      ...prev,
+      trustScore: newScore,
+    }));
+
+    if (sessionUser) {
+      addTrustLedgerEntryInFirestore(sessionUser.uid, delta, newScore, reason, category, sessionRef);
+    }
   };
 
   // Handle Propose Exchange Action
@@ -207,10 +255,11 @@ export default function App() {
     }));
 
     const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
-    const roomCode = `#${randomRoomNumber}`;
+    const roomCode = `#LP-${randomRoomNumber}`;
+    const sessionId = `sess_${Date.now()}`;
 
     const newSession: ExchangeSession = {
-      id: `sess_${Date.now()}`,
+      id: sessionId,
       roomCode,
       partner: proposePartner,
       packageType,
@@ -224,8 +273,8 @@ export default function App() {
         secondsRemaining: dwellTime,
         completedCount: 0,
         totalCount: count,
-        lastActionText: 'Peer connected. Queue initialized.',
-        latencyMs: 32,
+        lastActionText: 'Peer connected. Real-time Firebase room initialized.',
+        latencyMs: 18,
       },
       createdAt: new Date().toISOString(),
       startedAt: new Date().toISOString(),
@@ -234,13 +283,18 @@ export default function App() {
     setActiveSession(newSession);
     setProposePartner(null);
     setActiveTab('room');
+
+    if (sessionUser) {
+      updateSessionInFirestore(sessionId, newSession).catch(err => console.warn('Firestore session write:', err));
+    }
+
     showToast(`Exchange Room ${roomCode} active with @${proposePartner.username}`, 'info');
   };
 
   // Accept Incoming Proposal
   const handleAcceptIncomingProposal = (proposal: ExchangeProposal) => {
     const count = proposal.packageType === '5x5' ? 5 : 10;
-    const baseUserLinks = proposal.packageType === '5x5' ? DEFAULT_USER_LINKS_5 : DEFAULT_USER_LINKS_10;
+    const baseUserLinks: string[] = Array(count).fill('');
 
     const userLinks: ExchangeLink[] = baseUserLinks.slice(0, count).map((url, i) => ({
       id: `usr_link_${i + 1}`,
@@ -263,10 +317,11 @@ export default function App() {
     }));
 
     const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
-    const roomCode = `#${randomRoomNumber}`;
+    const roomCode = `#LP-${randomRoomNumber}`;
+    const sessionId = proposal.id.startsWith('ses_') ? proposal.id : `sess_${Date.now()}`;
 
     const newSession: ExchangeSession = {
-      id: `sess_${Date.now()}`,
+      id: sessionId,
       roomCode,
       partner: proposal.sender,
       packageType: proposal.packageType,
@@ -280,8 +335,8 @@ export default function App() {
         secondsRemaining: proposal.dwellTime,
         completedCount: 0,
         totalCount: count,
-        lastActionText: 'Proposal accepted. Connected to room.',
-        latencyMs: 28,
+        lastActionText: 'Proposal accepted. Real-time Firebase room synchronized.',
+        latencyMs: 14,
       },
       createdAt: new Date().toISOString(),
       startedAt: new Date().toISOString(),
@@ -290,34 +345,68 @@ export default function App() {
     setActiveSession(newSession);
     setIncomingProposal(null);
     setActiveTab('room');
+
+    if (sessionUser) {
+      updateSessionInFirestore(sessionId, newSession).catch(err => console.warn('Firestore proposal acceptance:', err));
+    }
+
     showToast(`Joined Exchange Room ${roomCode} with @${proposal.sender.username}`, 'success');
   };
 
   const handleDeclineIncomingProposal = () => {
+    if (incomingProposal && sessionUser && incomingProposal.id.startsWith('ses_')) {
+      updateSessionInFirestore(incomingProposal.id, { status: 'cancelled' }).catch(() => {});
+    }
     setIncomingProposal(null);
     showToast('Incoming proposal declined.', 'info');
   };
 
-  const handleSimulateNewIncomingProposal = () => {
+  const handleSimulateNewIncomingProposal = async () => {
     const availablePeers = peers.filter(p => p.onlineStatus === 'online' && p.trustScore >= 75);
     const randomPeer = availablePeers[Math.floor(Math.random() * availablePeers.length)] || peers[0];
+    if (!randomPeer) {
+      showToast('No other peers in the pool yet. Wait for a peer to register or invite a partner!', 'info');
+      return;
+    }
 
-    setIncomingProposal({
-      id: `prop_${Date.now()}`,
-      sender: randomPeer,
-      packageType: '5x5',
-      dwellTime: 30,
-      senderLinks: [
-        `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/download-bundle`,
-        `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/free-asset-pack`,
-        `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/exclusive-release-v3`,
-        `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/direct-zip-source`,
-        `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/cloud-link-backup`,
-      ],
-      createdAt: new Date().toISOString(),
-      note: 'Looking for prompt verification! Let us exchange 5x5 now.',
-    });
-    showToast(`New proposal from @${randomPeer.username}`, 'info');
+    if (sessionUser) {
+      try {
+        await sendExchangeProposalToFirestore(
+          randomPeer,
+          currentUser,
+          '5x5',
+          30,
+          [
+            `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/download-bundle`,
+            `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/free-asset-pack`,
+            `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/exclusive-release-v3`,
+            `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/direct-zip-source`,
+            `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/cloud-link-backup`,
+          ],
+          'Looking for prompt verification! Real-time 5x5 exchange requested.'
+        );
+        showToast(`Broadcasting exchange invite with @${randomPeer.username} via Firebase`, 'info');
+      } catch (err) {
+        console.warn('Failed to broadcast proposal to Firestore:', err);
+      }
+    } else {
+      setIncomingProposal({
+        id: `prop_${Date.now()}`,
+        sender: randomPeer,
+        packageType: '5x5',
+        dwellTime: 30,
+        senderLinks: [
+          `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/download-bundle`,
+          `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/free-asset-pack`,
+          `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/exclusive-release-v3`,
+          `https://${randomPeer.preferredShorteners[0] || 'shrinkme.io'}/direct-zip-source`,
+          `https://${randomPeer.preferredShorteners[1] || 'ouo.io'}/cloud-link-backup`,
+        ],
+        createdAt: new Date().toISOString(),
+        note: 'Looking for prompt verification! Let us exchange 5x5 now.',
+      });
+      showToast(`New proposal from @${randomPeer.username}`, 'info');
+    }
   };
 
   // Complete Exchange Session
@@ -330,29 +419,23 @@ export default function App() {
     // 1. Reward Trust Score (+2)
     applyTrustDelta(2, `Completed ${activeSession.packageType} exchange with @${partner.username}`, 'exchange_success', sessionRef);
 
-    // 2. Increment lifetime exchanges and update user stats
+    // 2. Increment lifetime exchanges and update user stats in Firestore
+    const nextExchanges = currentUser.lifetimeExchanges + 1;
+    const nextScore = Math.min(100, currentUser.trustScore + 2);
     setCurrentUser(prev => ({
       ...prev,
-      lifetimeExchanges: prev.lifetimeExchanges + 1,
+      lifetimeExchanges: nextExchanges,
+      trustScore: nextScore,
     }));
 
-    // 3. Update Daily Goals progress
-    setDailyGoals(goals =>
-      goals.map(g => {
-        if (g.id === 'g_01') {
-          const updated = g.current + 1;
-          return { ...g, current: updated, completed: updated >= g.target };
-        }
-        if (g.id === 'g_02') {
-          const linksCompleted = activeSession.packageType === '5x5' ? 5 : 10;
-          const updated = g.current + linksCompleted;
-          return { ...g, current: updated, completed: updated >= g.target };
-        }
-        return g;
-      })
-    );
+    if (sessionUser) {
+      updateUserProfileInFirestore(sessionUser.uid, {
+        lifetimeExchanges: nextExchanges,
+        trustScore: nextScore,
+      });
+    }
 
-    // 4. Register 24-Hour IP Cooldown for this partner (Section 2.D)
+    // 3. Register 24-Hour IP Cooldown for this partner in Firestore
     const newCooldown: IPCooldownRecord = {
       partnerId: partner.id,
       partnerUsername: partner.username,
@@ -361,24 +444,23 @@ export default function App() {
       initiatedAt: new Date().toISOString(),
     };
     setIpCooldowns(prev => [newCooldown, ...prev.filter(c => c.partnerId !== partner.id)]);
+    if (sessionUser) {
+      addCooldownInFirestore(sessionUser.uid, newCooldown);
+    }
 
-    // 5. Update partner stats
-    setPeers(prev =>
-      prev.map(p =>
-        p.id === partner.id
-          ? {
-              ...p,
-              lifetimeExchanges: p.lifetimeExchanges + 1,
-              trustScore: Math.min(100, p.trustScore + 1),
-            }
-          : p
-      )
-    );
+    // 4. Update session status in Firestore
+    if (sessionUser && activeSession.id) {
+      updateSessionInFirestore(activeSession.id, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+        mutualRating: rating,
+      });
+    }
 
     // Reset session and return to marketplace
     setActiveSession(null);
     setActiveTab('marketplace');
-    showToast(`Exchange ${sessionRef} finalized. +2 Trust Score & 24h IP isolation active.`, 'success');
+    showToast(`Exchange ${sessionRef} finalized. +2 Trust Score & 24h IP isolation stored to Firebase.`, 'success');
   };
 
   // Forfeit / Abandon Session
@@ -390,9 +472,15 @@ export default function App() {
 
     applyTrustDelta(-10, `Abandoned active exchange room with @${partner.username}`, 'session_abandon', sessionRef);
 
+    if (sessionUser && activeSession.id) {
+      updateSessionInFirestore(activeSession.id, {
+        status: 'cancelled',
+      });
+    }
+
     setActiveSession(null);
     setActiveTab('marketplace');
-    showToast(`Session forfeited. -10 Trust Score penalty applied.`, 'alert');
+    showToast(`Session forfeited. -10 Trust Score penalty applied to Firebase audit log.`, 'alert');
   };
 
   // Submit Formal Dispute
@@ -402,35 +490,56 @@ export default function App() {
     const sessionRef = activeSession.roomCode;
     const partner = activeSession.partner;
 
-    setPeers(prev =>
-      prev.map(p =>
-        p.id === partner.id
-          ? {
-              ...p,
-              trustScore: Math.max(0, p.trustScore - 15),
-              notes: `Disputed in ${sessionRef}: ${reason}`,
-            }
-          : p
-      )
-    );
+    if (sessionUser && activeSession.id) {
+      updateSessionInFirestore(activeSession.id, {
+        status: 'disputed',
+        dispute: {
+          reason,
+          notes,
+          evidenceUrl,
+          filedAt: new Date().toISOString(),
+          status: 'under_review',
+        }
+      });
+    }
 
     setShowDisputeModal(false);
     setActiveSession(null);
     setActiveTab('marketplace');
-    showToast(`Dispute lodged for ${sessionRef}. Session frozen.`, 'alert');
+    showToast(`Dispute lodged for ${sessionRef}. Session frozen in Firebase.`, 'alert');
   };
 
   const handleToggleFavorite = (peerId: string) => {
     setPeers(prev =>
-      prev.map(p => (p.id === peerId ? { ...p, isFavorite: !p.isFavorite } : p))
+      prev.map(p => {
+        if (p.id === peerId) {
+          const nextFav = !p.isFavorite;
+          if (sessionUser) {
+            updateUserProfileInFirestore(p.id, { isFavorite: nextFav });
+          }
+          return { ...p, isFavorite: nextFav };
+        }
+        return p;
+      })
     );
   };
 
   const handleToggleUserStatus = () => {
+    const nextStatus = currentUser.onlineStatus === 'online' ? 'away' : 'online';
     setCurrentUser(prev => ({
       ...prev,
-      onlineStatus: prev.onlineStatus === 'online' ? 'away' : 'online',
+      onlineStatus: nextStatus,
     }));
+    if (sessionUser) {
+      updateUserProfileInFirestore(sessionUser.uid, { onlineStatus: nextStatus });
+    }
+  };
+
+  const handleUpdateSession = (updated: ExchangeSession) => {
+    setActiveSession(updated);
+    if (sessionUser && updated.id) {
+      updateSessionInFirestore(updated.id, updated).catch(() => {});
+    }
   };
 
   const partnerCooldownActive = proposePartner
@@ -561,7 +670,7 @@ export default function App() {
               setProposePartner(partner);
             }}
             onSubmitProposal={handleLaunchProposal}
-            onUpdateSession={(updated) => setActiveSession(updated)}
+            onUpdateSession={handleUpdateSession}
             onCompleteSession={handleCompleteSession}
             onAbandonSession={handleAbandonSession}
             onOpenDispute={() => setShowDisputeModal(true)}

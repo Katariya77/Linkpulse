@@ -1,6 +1,6 @@
 {
   "name": "Copy of LinkPulse",
-  "description": "P2P Link \u0026 Traffic Exchange Marketplace for link earners with real-time peer matching, synchronized verification rooms, and trust score safeguards.",
+  "description": "Community link exchange platform for shortlink creators with live partner matching, verified click rooms, and trust rating safeguards.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
