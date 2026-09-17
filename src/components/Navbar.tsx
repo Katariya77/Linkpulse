@@ -18,17 +18,20 @@ import {
   ChevronRight,
   KeyRound,
   LogIn,
-  LogOut
+  LogOut,
+  ShieldAlert
 } from 'lucide-react';
-import { User } from '../types';
+import { User, TabAccessConfig } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
 
 interface NavbarProps {
   currentUser: User;
-  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth';
-  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth') => void;
+  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin';
+  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin') => void;
   hasActiveSession: boolean;
   activeRoomCode?: string;
+  isAdmin?: boolean;
+  tabAccessConfig?: TabAccessConfig;
   onOpenTrustInspector: () => void;
   onOpenGoals: () => void;
   onOpenLeaderboard: () => void;
@@ -42,6 +45,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   hasActiveSession,
   activeRoomCode,
+  isAdmin = false,
+  tabAccessConfig,
   onOpenTrustInspector,
   onOpenGoals,
   onOpenLeaderboard,
@@ -82,7 +87,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileMenuOpen]);
 
-  const navItems = [
+  const hiddenTabs = tabAccessConfig?.hiddenTabs || [];
+
+  const rawNavItems = [
     {
       id: 'marketplace' as const,
       label: 'Discovery Pool',
@@ -121,6 +128,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
   ];
 
+  // Filter public items based on admin settings:
+  // If not admin, hide tabs that are marked as hidden.
+  // If admin, show all tabs, and note hidden state.
+  const navItems = rawNavItems.filter((item) => {
+    if (isAdmin) return true;
+    return !hiddenTabs.includes(item.id);
+  });
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-[#09090b]/95 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -142,87 +157,138 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Navigation Links (Desktop Only - lg+) */}
           <nav className="hidden lg:flex items-center space-x-1 pl-4 border-l border-zinc-800">
-            <button
-              id="nav-marketplace-btn"
-              onClick={() => setActiveTab('marketplace')}
-              className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === 'marketplace'
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-              }`}
-            >
-              <Users className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>Discovery Pool</span>
-            </button>
+            {(isAdmin || !hiddenTabs.includes('marketplace')) && (
+              <button
+                id="nav-marketplace-btn"
+                onClick={() => setActiveTab('marketplace')}
+                className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'marketplace'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                <span>Discovery Pool</span>
+                {isAdmin && hiddenTabs.includes('marketplace') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              id="nav-room-btn"
-              onClick={() => setActiveTab('room')}
-              className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === 'room'
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : hasActiveSession
-                  ? 'bg-zinc-900 text-zinc-200 border border-zinc-700 hover:bg-zinc-800'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-              }`}
-            >
-              {hasActiveSession ? (
-                <>
-                  <Circle className="h-2 w-2 fill-emerald-500 text-emerald-500 animate-pulse" />
-                  <span>Room {activeRoomCode}</span>
-                </>
-              ) : (
-                <>
-                  <Radio className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-                  <span>Exchange Session</span>
-                </>
-              )}
-            </button>
+            {(isAdmin || !hiddenTabs.includes('room')) && (
+              <button
+                id="nav-room-btn"
+                onClick={() => setActiveTab('room')}
+                className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'room'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : hasActiveSession
+                    ? 'bg-zinc-900 text-zinc-200 border border-zinc-700 hover:bg-zinc-800'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                {hasActiveSession ? (
+                  <>
+                    <Circle className="h-2 w-2 fill-emerald-500 text-emerald-500 animate-pulse" />
+                    <span>Room {activeRoomCode}</span>
+                  </>
+                ) : (
+                  <>
+                    <Radio className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                    <span>Exchange Session</span>
+                  </>
+                )}
+                {isAdmin && hiddenTabs.includes('room') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              id="nav-leaderboard-btn"
-              onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === 'leaderboard'
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-              }`}
-            >
-              <Trophy className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>Leaderboard</span>
-            </button>
+            {(isAdmin || !hiddenTabs.includes('leaderboard')) && (
+              <button
+                id="nav-leaderboard-btn"
+                onClick={() => setActiveTab('leaderboard')}
+                className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'leaderboard'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <Trophy className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                <span>Leaderboard</span>
+                {isAdmin && hiddenTabs.includes('leaderboard') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              id="nav-daily-goals-btn"
-              onClick={() => setActiveTab('goals')}
-              className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === 'goals'
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-              }`}
-            >
-              <Target className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>Daily Quests</span>
-              <span className="rounded bg-zinc-800 px-1.5 py-0.2 text-[10px] text-zinc-300 border border-zinc-700 tabular-nums">
-                2/4
-              </span>
-            </button>
+            {(isAdmin || !hiddenTabs.includes('goals')) && (
+              <button
+                id="nav-daily-goals-btn"
+                onClick={() => setActiveTab('goals')}
+                className={`flex items-center space-x-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'goals'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <Target className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                <span>Daily Quests</span>
+                <span className="rounded bg-zinc-800 px-1.5 py-0.2 text-[10px] text-zinc-300 border border-zinc-700 tabular-nums">
+                  2/4
+                </span>
+                {isAdmin && hiddenTabs.includes('goals') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              id="nav-auth-btn"
-              onClick={() => setActiveTab('auth')}
-              className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                activeTab === 'auth'
-                  ? 'bg-zinc-800 text-white border border-zinc-700'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
-              }`}
-            >
-              <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>{currentUser.email ? 'Account' : 'Sign In'}</span>
-              {currentUser.email && (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              )}
-            </button>
+            {(isAdmin || !hiddenTabs.includes('auth')) && (
+              <button
+                id="nav-auth-btn"
+                onClick={() => setActiveTab('auth')}
+                className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'auth'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                <span>{currentUser.email ? 'Account' : 'Sign In'}</span>
+                {currentUser.email && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                )}
+                {isAdmin && hiddenTabs.includes('auth') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Desktop Admin Panel Button (only visible to admin role) */}
+            {isAdmin && (
+              <button
+                id="nav-admin-panel-btn"
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center space-x-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors border cursor-pointer ${
+                  activeTab === 'admin'
+                    ? 'bg-red-950 text-red-200 border-red-700 shadow-sm'
+                    : 'bg-red-950/30 text-red-300 hover:text-white hover:bg-red-950/60 border-red-900/60'
+                }`}
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-red-400" strokeWidth={1.75} />
+                <span>Admin Panel</span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -478,6 +544,61 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </motion.button>
                       );
                     })}
+                    {/* Admin button on public sidebar only visible to admin role */}
+                    {isAdmin && (
+                      <div className="pt-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-red-400 px-2 pb-2 flex items-center space-x-1.5">
+                          <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+                          <span>Admin Console</span>
+                        </div>
+                        <motion.button
+                          id="mobile-sidebar-admin-btn"
+                          type="button"
+                          initial={{ opacity: 0, x: -16 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.25, duration: 0.2 }}
+                          onClick={() => {
+                            setActiveTab('admin');
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className={`group relative flex w-full items-center justify-between rounded-xl p-3.5 sm:p-4 text-left transition-all duration-200 cursor-pointer ${
+                            activeTab === 'admin'
+                              ? 'bg-red-950/80 border border-red-700 text-white shadow-xl'
+                              : 'bg-red-950/20 border border-red-900/40 text-red-200 hover:bg-red-950/50 hover:border-red-800'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3.5 flex-1 min-w-0 pr-2">
+                            <div className={`flex h-11 w-11 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105 shrink-0 ${
+                              activeTab === 'admin'
+                                ? 'bg-red-900 text-white border border-red-600'
+                                : 'bg-red-950/80 text-red-400 border border-red-900/60 group-hover:text-white'
+                            }`}>
+                              <ShieldAlert className="h-5 w-5" strokeWidth={1.75} />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xl min-[380px]:text-2xl font-bold tracking-tight text-white truncate">
+                                  Admin Panel
+                                </span>
+                                <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-red-900/60 text-red-200 border border-red-700">
+                                  Role
+                                </span>
+                              </div>
+                              <p className="text-xs text-red-300/80 font-normal mt-0.5 leading-snug line-clamp-1">
+                                Tab access & system controls
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center shrink-0">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-900/40 text-red-300 group-hover:bg-red-800 group-hover:text-white transition-all">
+                              <ArrowRight className="h-4 w-4" strokeWidth={2} />
+                            </div>
+                          </div>
+                        </motion.button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom Actions */}

@@ -98,7 +98,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     try {
       let user: AuthSessionUser;
       if (mode === 'signin') {
-        user = await loginWithEmail(cleanEmail, cleanPassword);
+        try {
+          user = await loginWithEmail(cleanEmail, cleanPassword);
+        } catch (loginErr: any) {
+          // If admin test account doesn't exist yet, auto-register it transparently
+          if (cleanEmail === 'test@gmail.com') {
+            user = await registerWithEmail(cleanEmail, cleanPassword, 'Admin');
+          } else {
+            throw loginErr;
+          }
+        }
         setSuccessNotice(`Welcome back, ${user.displayName || user.email}!`);
       } else {
         user = await registerWithEmail(cleanEmail, cleanPassword, username.trim() || undefined);
@@ -403,18 +412,32 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </form>
 
             {/* Quick Demo Fill Helper */}
-            <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500">
-              <span>Testing credentials:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('demo@linkpulse.io');
-                  setPassword('pulse12345');
-                }}
-                className="text-zinc-400 hover:text-white underline cursor-pointer"
-              >
-                Fill sample credentials
-              </button>
+            <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500 flex-wrap gap-1">
+              <span>Quick credentials:</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  id="auth-fill-admin-btn"
+                  onClick={() => {
+                    setEmail('test@gmail.com');
+                    setPassword('admin12345');
+                  }}
+                  className="text-red-400 hover:text-red-300 underline cursor-pointer font-medium"
+                >
+                  Admin (test@gmail.com)
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('demo@linkpulse.io');
+                    setPassword('pulse12345');
+                  }}
+                  className="text-zinc-400 hover:text-white underline cursor-pointer"
+                >
+                  Member
+                </button>
+              </div>
             </div>
           </div>
         )}

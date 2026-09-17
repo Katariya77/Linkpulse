@@ -10,6 +10,7 @@ import { ExchangeSessionPage } from './components/ExchangeSessionPage';
 import { LeaderboardPage } from './components/LeaderboardPage';
 import { DailyQuestsPage } from './components/DailyQuestsPage';
 import { AuthPage } from './components/AuthPage';
+import { AdminPanel } from './components/AdminPanel';
 import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
@@ -21,7 +22,10 @@ import {
   IPCooldownRecord, 
   DailyGoal, 
   ExchangeProposal, 
-  PackageType 
+  PackageType,
+  PublicTabId,
+  TabAccessConfig,
+  DEFAULT_TAB_ACCESS
 } from './types';
 import { 
   syncUserProfile, 
@@ -36,7 +40,11 @@ import {
   subscribeToCooldowns,
   addCooldownInFirestore,
   cleanupMockDataFromFirestore,
-  REAL_INITIAL_GOALS
+  REAL_INITIAL_GOALS,
+  isUserAdmin,
+  subscribeToTabAccess,
+  saveTabAccessInFirestore,
+  ADMIN_EMAIL
 } from './lib/firestoreService';
 import { extractDomain, formatTimeRemaining } from './utils/trustUtils';
 import { ShieldCheck, Check, AlertCircle, Sparkles, X, Shield } from 'lucide-react';
@@ -59,11 +67,14 @@ const INITIAL_FALLBACK_USER: User = {
 
 export default function App() {
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin'>('marketplace');
 
   // Firebase authenticated session state
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+
+  // Tab access configuration (synced from Firestore)
+  const [tabAccessConfig, setTabAccessConfig] = useState<TabAccessConfig>(DEFAULT_TAB_ACCESS);
 
   // User profile & online pool (synced with Firebase Firestore in real time)
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_FALLBACK_USER);
@@ -94,6 +105,29 @@ export default function App() {
       setToastMessage(null);
     }, 4500);
   };
+
+  // Check if current user has admin privileges (assigned to test@gmail.com)
+  const isAdmin = isUserAdmin(currentUser, sessionUser);
+
+  // Subscribe to public tab visibility settings in real time
+  useEffect(() => {
+    const unsub = subscribeToTabAccess((config) => {
+      setTabAccessConfig(config);
+    });
+    return () => unsub();
+  }, []);
+
+  // Redirect public visitors if they land on a hidden tab
+  useEffect(() => {
+    if (!isAdmin && activeTab !== 'admin' && tabAccessConfig.hiddenTabs.includes(activeTab)) {
+      const publicFallback = (['marketplace', 'room', 'leaderboard', 'goals', 'auth'] as PublicTabId[]).find(
+        (id) => !tabAccessConfig.hiddenTabs.includes(id)
+      );
+      if (publicFallback && publicFallback !== activeTab) {
+        setActiveTab(publicFallback);
+      }
+    }
+  }, [tabAccessConfig.hiddenTabs, isAdmin, activeTab]);
 
   // Sign out handler
   const handleSignOut = async () => {
@@ -614,6 +648,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         hasActiveSession={!!activeSession}
         activeRoomCode={activeSession?.roomCode}
+        isAdmin={isAdmin}
+        tabAccessConfig={tabAccessConfig}
         onOpenTrustInspector={() => setShowTrustInspector(true)}
         onOpenGoals={() => setActiveTab('goals')}
         onOpenLeaderboard={() => setActiveTab('leaderboard')}
@@ -733,6 +769,60 @@ export default function App() {
             onSignOut={handleSignOut}
             onNavigateToApp={() => setActiveTab('marketplace')}
           />
+        )}
+
+        {/* Tab 6: Dedicated Admin Panel (Role: test@gmail.com) */}
+        {activeTab === 'admin' && (
+          isAdmin ? (
+            <AdminPanel
+              currentUser={currentUser}
+              sessionUser={sessionUser}
+              tabAccess={tabAccessConfig}
+              onUpdateTabAccess={async (newHiddenTabs) => {
+                try {
+                  await saveTabAccessInFirestore(
+                    newHiddenTabs,
+                    sessionUser?.email || currentUser.email || ADMIN_EMAIL
+                  );
+                  showToast('Tab access settings saved in real time.', 'success');
+                } catch (err: any) {
+                  console.error('Error saving tab access:', err);
+                  showToast('Failed to save tab access.', 'alert');
+                }
+              }}
+              onExitToPublic={() => setActiveTab('marketplace')}
+              onSignOut={handleSignOut}
+            />
+          ) : (
+            <div className="max-w-md mx-auto my-12 p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 text-center space-y-4 shadow-xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-950/60 border border-red-900/60 text-red-400 mx-auto">
+                <Shield className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-lg font-bold text-white">Administrator Access Required</h2>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  The Admin Panel is reserved for system administrators. Please sign in with the assigned admin email (<strong className="text-red-300 font-mono">test@gmail.com</strong>).
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  id="admin-forbidden-signin-btn"
+                  onClick={() => setActiveTab('auth')}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 transition-colors cursor-pointer"
+                >
+                  Sign In as Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('marketplace')}
+                  className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
+                >
+                  Return to App
+                </button>
+              </div>
+            </div>
+          )
         )}
 
       </main>

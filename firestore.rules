@@ -42,6 +42,13 @@ service cloud.firestore {
       allow get, list, create, update, delete: if isSignedIn() && isValidId(cooldownId);
     }
 
+    // Application settings and tab access configuration
+    match /settings/{settingId} {
+      allow get, list: if true;
+      allow create, update: if isSignedIn() && isValidId(settingId);
+      allow delete: if false;
+    }
+
     // Connection validation test endpoint
     match /test/{testId} {
       allow read, write: if true;

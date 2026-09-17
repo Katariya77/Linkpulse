@@ -19,8 +19,33 @@ import {
   TrustLedgerEntry, 
   IPCooldownRecord, 
   DailyGoal, 
-  ExchangeProposal 
+  ExchangeProposal,
+  PublicTabId,
+  TabAccessConfig,
+  DEFAULT_TAB_ACCESS
 } from '../types';
+
+export const ADMIN_EMAIL = 'test@gmail.com';
+
+/**
+ * Checks if a user has the admin role.
+ * Assigned to test@gmail.com or role === 'admin'.
+ */
+export function isUserAdmin(
+  user?: { email?: string | null; role?: string } | null,
+  sessionUser?: AuthSessionUser | null
+): boolean {
+  if (sessionUser && sessionUser.email && sessionUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    return true;
+  }
+  if (user && user.email && user.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    return true;
+  }
+  if (user && user.role === 'admin') {
+    return true;
+  }
+  return false;
+}
 
 export const REAL_INITIAL_GOALS: DailyGoal[] = [
   {
@@ -125,9 +150,10 @@ export function syncUserProfile(
   // Check if profile exists; if not, initialize in Firestore
   getDoc(userDocRef).then((snap) => {
     if (!snap.exists()) {
+      const isAdminAccount = (sessionUser.email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
       const initialProfile: User = {
         id: sessionUser.uid,
-        username: sessionUser.displayName || sessionUser.email?.split('@')[0] || 'PeerUser',
+        username: sessionUser.displayName || (isAdminAccount ? 'Admin (test)' : (sessionUser.email?.split('@')[0] || 'PeerUser')),
         avatar: sessionUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         onlineStatus: 'online',
         trustScore: 100,
@@ -140,6 +166,7 @@ export function syncUserProfile(
         countryCode: 'US',
         joinedDate: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         email: sessionUser.email || undefined,
+        role: isAdminAccount ? 'admin' : 'member',
         authProvider: sessionUser.providerId,
       };
 
@@ -173,9 +200,10 @@ export function syncUserProfile(
   const unsubscribe = onSnapshot(userDocRef, (snap) => {
     if (snap.exists()) {
       const data = snap.data();
+      const isAdminAccount = (sessionUser.email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() || data.role === 'admin';
       const user: User = {
         id: snap.id,
-        username: data.username || sessionUser.displayName || 'PeerUser',
+        username: data.username || sessionUser.displayName || (isAdminAccount ? 'Admin (test)' : 'PeerUser'),
         avatar: data.avatar || sessionUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         onlineStatus: data.onlineStatus || 'online',
         trustScore: typeof data.trustScore === 'number' ? data.trustScore : 100,
@@ -188,6 +216,7 @@ export function syncUserProfile(
         countryCode: data.countryCode || 'US',
         joinedDate: data.joinedDate || 'Recently',
         email: sessionUser.email || undefined,
+        role: isAdminAccount ? 'admin' : (data.role || 'member'),
         authProvider: sessionUser.providerId,
         isFavorite: Boolean(data.isFavorite),
         notes: data.notes || '',
@@ -531,4 +560,72 @@ export async function addCooldownInFirestore(
     ...record,
     createdAt: serverTimestamp(),
   });
+}
+
+const SETTINGS_COLLECTION = 'settings';
+const TAB_ACCESS_DOC = 'tab_access';
+
+/**
+ * Subscribes to global public tab access configuration.
+ */
+export function subscribeToTabAccess(onUpdate: (config: TabAccessConfig) => void): () => void {
+  // Read from localStorage first for immediate zero-latency hydration
+  try {
+    const cached = localStorage.getItem('linkpulse_tab_access');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && Array.isArray(parsed.hiddenTabs)) {
+        onUpdate(parsed);
+      }
+    }
+  } catch (e) {}
+
+  if (!db || !isFirebaseConfigured) {
+    return () => {};
+  }
+
+  const docRef = doc(db, SETTINGS_COLLECTION, TAB_ACCESS_DOC);
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data();
+      const config: TabAccessConfig = {
+        hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : [],
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || undefined,
+        updatedBy: data.updatedBy,
+      };
+      try {
+        localStorage.setItem('linkpulse_tab_access', JSON.stringify(config));
+      } catch (e) {}
+      onUpdate(config);
+    } else {
+      onUpdate(DEFAULT_TAB_ACCESS);
+    }
+  }, (err) => {
+    console.warn('Tab access settings listener:', err);
+  });
+}
+
+/**
+ * Saves updated tab access visibility to Firestore.
+ */
+export async function saveTabAccessInFirestore(
+  hiddenTabs: PublicTabId[],
+  updatedByEmail?: string
+): Promise<void> {
+  const config: TabAccessConfig = {
+    hiddenTabs,
+    updatedAt: new Date().toISOString(),
+    updatedBy: updatedByEmail || 'admin',
+  };
+  try {
+    localStorage.setItem('linkpulse_tab_access', JSON.stringify(config));
+  } catch (e) {}
+
+  if (!db || !isFirebaseConfigured) return;
+  const docRef = doc(db, SETTINGS_COLLECTION, TAB_ACCESS_DOC);
+  await setDoc(docRef, {
+    hiddenTabs,
+    updatedAt: serverTimestamp(),
+    updatedBy: updatedByEmail || 'admin',
+  }, { merge: true });
 }

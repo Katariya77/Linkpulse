@@ -1,6 +1,59 @@
 export type UserStatus = 'online' | 'in_session' | 'away' | 'offline';
 export type TrustTier = 'elite' | 'reliable' | 'caution' | 'at_risk' | 'suspended';
 export type PackageType = '5x5' | '10x10';
+export type UserRole = 'admin' | 'member';
+
+export type PublicTabId = 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth';
+
+export interface TabAccessConfig {
+  hiddenTabs: PublicTabId[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export const DEFAULT_TAB_ACCESS: TabAccessConfig = {
+  hiddenTabs: [],
+};
+
+export interface PublicTabMeta {
+  id: PublicTabId;
+  name: string;
+  description: string;
+  defaultVisible: boolean;
+}
+
+export const PUBLIC_TABS_LIST: PublicTabMeta[] = [
+  {
+    id: 'marketplace',
+    name: 'Discovery Pool',
+    description: 'Public member marketplace and online link exchange pool',
+    defaultVisible: true,
+  },
+  {
+    id: 'room',
+    name: 'Exchange Session',
+    description: 'Live 1-on-1 link verification rooms',
+    defaultVisible: true,
+  },
+  {
+    id: 'leaderboard',
+    name: 'Leaderboard',
+    description: 'Top members, trust scores, and community rankings',
+    defaultVisible: true,
+  },
+  {
+    id: 'goals',
+    name: 'Daily Quests',
+    description: 'Daily exchange challenges and reward milestones',
+    defaultVisible: true,
+  },
+  {
+    id: 'auth',
+    name: 'Account & Sign In',
+    description: 'User registration, login, and profile settings',
+    defaultVisible: true,
+  },
+];
 
 export interface User {
   id: string;
@@ -17,6 +70,7 @@ export interface User {
   countryCode: string;
   joinedDate: string;
   email?: string;
+  role?: UserRole;
   authProvider?: 'google' | 'password' | 'demo';
   isFavorite?: boolean;
   notes?: string;

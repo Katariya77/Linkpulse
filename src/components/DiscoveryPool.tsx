@@ -100,11 +100,11 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                     {incomingProposal.packageType}
                   </span>
                   <span className="text-[10px] text-zinc-500">
-                    {incomingProposal.dwellTime}s dwell
+                    {incomingProposal.dwellTime}s timer
                   </span>
                 </div>
                 <h3 className="text-sm font-semibold text-white mt-0.5">
-                  @{incomingProposal.sender.username} proposed an exchange session
+                  @{incomingProposal.sender.username} invited you to a 1-on-1 link exchange
                 </h3>
                 {incomingProposal.note && (
                   <p className="text-xs text-zinc-400 mt-0.5">
@@ -119,7 +119,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                 type="button"
                 id="decline-proposal-btn"
                 onClick={onDeclineProposal}
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
               >
                 Decline
               </button>
@@ -127,10 +127,10 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                 type="button"
                 id="accept-proposal-btn"
                 onClick={() => onAcceptProposal(incomingProposal)}
-                className="rounded-md bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                className="rounded-md bg-white text-zinc-950 hover:bg-zinc-200 px-3.5 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" strokeWidth={2} />
-                <span>Accept & Open Room</span>
+                <span>Accept & Join Room</span>
               </button>
             </div>
           </div>
@@ -141,14 +141,14 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span>Online Peers</span>
+            <span>Active Members</span>
             <Users className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
           </div>
           <div className="mt-1.5 flex items-baseline space-x-2">
             <span className="text-xl font-semibold text-white tabular-nums">
               {safePeers.length}
             </span>
-            <span className="text-xs text-zinc-400">peers active</span>
+            <span className="text-xs text-zinc-400">members online</span>
           </div>
         </div>
 
@@ -162,30 +162,30 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
               {currentUser.lifetimeExchanges > 0 ? `${currentUser.successRate}%` : '100%'}
             </span>
             <span className="text-xs text-zinc-400">
-              {currentUser.lifetimeExchanges > 0 ? `${currentUser.lifetimeExchanges} swaps` : 'verified'}
+              {currentUser.lifetimeExchanges > 0 ? `${currentUser.lifetimeExchanges} completed` : 'verified'}
             </span>
           </div>
         </div>
 
         <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span>24h IP Guard</span>
+            <span>Fair Play Protection</span>
             <Clock className="h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
           </div>
           <div className="mt-1.5 flex items-baseline space-x-2">
             <span className="text-xl font-semibold text-zinc-200">Active</span>
-            <span className="text-xs text-zinc-400">isolated</span>
+            <span className="text-xs text-zinc-400">anti-spam guard</span>
           </div>
         </div>
 
         <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
           <div className="flex items-center justify-between text-zinc-400 text-xs">
-            <span>Your Trust</span>
+            <span>Your Trust Rating</span>
             <button
               onClick={onOpenTrustInspector}
-              className="text-xs text-zinc-400 hover:text-white underline"
+              className="text-xs text-zinc-400 hover:text-white underline cursor-pointer"
             >
-              Details
+              View breakdown
             </button>
           </div>
           <div className="mt-1.5 flex items-baseline space-x-2">
@@ -202,10 +202,10 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
         <div className="p-4 border-b border-zinc-800/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-white">
-              Online Discovery Pool
+              Community Member Pool
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Select an active peer to propose a synchronized 1-on-1 link exchange
+              Select an active member to propose a 1-on-1 link exchange
             </p>
           </div>
 
@@ -214,21 +214,21 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
               type="button"
               id="instant-match-broadcast-btn"
               onClick={onSimulateIncomingProposal}
-              className="flex items-center justify-center space-x-1.5 rounded-md border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors"
-              title="Broadcast an instant match request to online peers via Firebase"
+              className="flex items-center justify-center space-x-1.5 rounded-md border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors cursor-pointer"
+              title="Find an available exchange partner instantly"
             >
               <Zap className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              <span>Instant Match & Broadcast</span>
+              <span>Quick Partner Match</span>
             </button>
 
-            <div className="relative w-full sm:w-52">
-              <Search className="absolute left-2.5 top-2.5 h-3 w-3 text-zinc-500" strokeWidth={1.5} />
+            <div className="relative w-full sm:w-60">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" strokeWidth={1.5} />
               <input
                 type="text"
                 id="search-peers-input"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Filter by name, network..."
+                placeholder="Search members by name, link network..."
                 className="w-full rounded-md border border-zinc-800 bg-zinc-950 pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 focus:border-zinc-600 focus:outline-none"
               />
             </div>
@@ -240,40 +240,40 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
           <button
             id="filter-all"
             onClick={() => setActiveFilter('all')}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
               activeFilter === 'all'
                 ? 'bg-zinc-800 text-white font-medium'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            All ({peers.length})
+            All Members ({peers.length})
           </button>
           <button
             id="filter-high-trust"
             onClick={() => setActiveFilter('high_trust')}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
               activeFilter === 'high_trust'
                 ? 'bg-zinc-800 text-white font-medium'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Elite (90+)
+            Top Rated (90+)
           </button>
           <button
             id="filter-available"
             onClick={() => setActiveFilter('available')}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
               activeFilter === 'available'
                 ? 'bg-zinc-800 text-white font-medium'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            Ready (No Cooldown)
+            Available Now
           </button>
           <button
             id="filter-favorites"
             onClick={() => setActiveFilter('favorites')}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
               activeFilter === 'favorites'
                 ? 'bg-zinc-800 text-white font-medium'
                 : 'text-zinc-400 hover:text-zinc-200'
@@ -283,7 +283,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
           </button>
         </div>
 
-        {/* Peer Table List */}
+        {/* Member Table List */}
         <div className="divide-y divide-zinc-800/60">
           {safePeers.length === 0 ? (
             <div className="p-12 text-center space-y-3">
@@ -291,15 +291,15 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                 <Users className="h-5 w-5" strokeWidth={1.5} />
               </div>
               <div className="space-y-1 max-w-md mx-auto">
-                <h3 className="text-sm font-semibold text-white">No other peers registered yet</h3>
-                <p className="text-xs text-zinc-400">
-                  You are currently the only active account connected to LinkPulse. Real-time Firebase listeners are connected. When another peer creates an account and logs in, they will immediately appear in this discovery pool.
+                <h3 className="text-sm font-semibold text-white">No other members online yet</h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  You are currently the only member active in LinkPulse right now. When another member signs in or joins, their profile will appear here automatically for 1-on-1 link exchanges.
                 </p>
               </div>
             </div>
           ) : filteredPeers.length === 0 ? (
             <div className="p-8 text-center text-zinc-500 text-xs">
-              No matching peers found for current filter.
+              No members found matching your search or filter.
             </div>
           ) : (
             filteredPeers.map((peer) => {
@@ -328,6 +328,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                             ? 'bg-zinc-200'
                             : 'bg-zinc-600'
                         }`}
+                        title={peer.onlineStatus === 'online' ? 'Online' : 'Away'}
                       />
                     </div>
 
@@ -335,8 +336,8 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => onToggleFavorite(peer.id)}
-                          className="text-zinc-600 hover:text-zinc-300 transition-colors"
-                          title={peer.isFavorite ? 'Remove favorite' : 'Add to favorites'}
+                          className="text-zinc-600 hover:text-zinc-300 transition-colors cursor-pointer"
+                          title={peer.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                         >
                           <Star 
                             className={`h-3.5 w-3.5 ${peer.isFavorite ? 'fill-zinc-300 text-zinc-300' : ''}`} 
@@ -360,14 +361,14 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                           Trust: <span className="tabular-nums font-medium">{peer.trustScore}</span>
                         </span>
                         <span className="text-zinc-600">•</span>
-                        <span><span className="tabular-nums">{peer.successRate}%</span> Success</span>
+                        <span><span className="tabular-nums">{peer.successRate}%</span> Completion</span>
                         <span className="text-zinc-600">•</span>
-                        <span><span className="tabular-nums">{peer.lifetimeExchanges}</span> Swaps</span>
+                        <span><span className="tabular-nums">{peer.lifetimeExchanges}</span> Exchanges</span>
                         {peer.activeStreak > 0 && (
                           <>
                             <span className="text-zinc-600">•</span>
                             <span className="text-zinc-300 flex items-center gap-0.5">
-                              <Flame className="h-3 w-3 text-zinc-400" strokeWidth={1.5} /> {peer.activeStreak}d
+                              <Flame className="h-3 w-3 text-zinc-400" strokeWidth={1.5} /> {peer.activeStreak}d streak
                             </span>
                           </>
                         )}
@@ -392,7 +393,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                     {cooldown ? (
                       <div className="flex items-center space-x-1 rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400">
                         <Clock className="h-3 w-3 text-zinc-500" strokeWidth={1.5} />
-                        <span>24h Cooldown ({cooldown.remainingFormatted})</span>
+                        <span>Daily Cooldown ({cooldown.remainingFormatted})</span>
                       </div>
                     ) : isSuspended ? (
                       <div className="flex items-center space-x-1 rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-500">
@@ -402,10 +403,10 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                     ) : isInSession ? (
                       <div className="flex items-center space-x-1 rounded border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-400">
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
-                        <span>In Session</span>
+                        <span>In Exchange</span>
                       </div>
                     ) : (
-                      <span className="text-[11px] text-zinc-500 sm:hidden">Ready for swap</span>
+                      <span className="text-[11px] text-zinc-500 sm:hidden">Available for exchange</span>
                     )}
 
                     <button
@@ -419,7 +420,7 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                           : 'bg-white text-zinc-950 hover:bg-zinc-200 font-semibold cursor-pointer'
                       }`}
                     >
-                      Propose
+                      Invite to Exchange
                     </button>
                   </div>
                 </div>

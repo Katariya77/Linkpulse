@@ -1,0 +1,450 @@
+import React, { useState } from 'react';
+import { 
+  ShieldAlert, 
+  Eye, 
+  EyeOff, 
+  Menu, 
+  X, 
+  ArrowLeft, 
+  LogOut, 
+  Check, 
+  AlertCircle,
+  Sliders,
+  Users,
+  Radio,
+  Trophy,
+  Target,
+  KeyRound,
+  Sparkles,
+  Lock
+} from 'lucide-react';
+import { User, PublicTabId, TabAccessConfig, PUBLIC_TABS_LIST } from '../types';
+import { AuthSessionUser } from '../lib/firebase';
+import { ADMIN_EMAIL } from '../lib/firestoreService';
+
+interface AdminPanelProps {
+  currentUser: User;
+  sessionUser?: AuthSessionUser | null;
+  tabAccess: TabAccessConfig;
+  onUpdateTabAccess: (hiddenTabs: PublicTabId[]) => Promise<void> | void;
+  onExitToPublic: () => void;
+  onSignOut?: () => void;
+}
+
+const TAB_ICONS: Record<PublicTabId, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+  marketplace: Users,
+  room: Radio,
+  leaderboard: Trophy,
+  goals: Target,
+  auth: KeyRound,
+};
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({
+  currentUser,
+  sessionUser,
+  tabAccess,
+  onUpdateTabAccess,
+  onExitToPublic,
+  onSignOut,
+}) => {
+  // Mobile sidebar drawer state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [selectedAdminTab] = useState<'tab_access'>('tab_access');
+  const [savingTab, setSavingTab] = useState<PublicTabId | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const displayEmail = sessionUser?.email || currentUser.email || ADMIN_EMAIL;
+  const hiddenTabs = tabAccess.hiddenTabs || [];
+  const visibleCount = PUBLIC_TABS_LIST.length - hiddenTabs.length;
+
+  const handleToggleTabVisibility = async (tabId: PublicTabId) => {
+    setSavingTab(tabId);
+    const isCurrentlyHidden = hiddenTabs.includes(tabId);
+    let updated: PublicTabId[];
+
+    if (isCurrentlyHidden) {
+      // Unhide
+      updated = hiddenTabs.filter(id => id !== tabId);
+      setNotification(`Tab "${tabId}" is now visible to public members.`);
+    } else {
+      // Hide
+      updated = [...hiddenTabs, tabId];
+      setNotification(`Tab "${tabId}" is now hidden from public members.`);
+    }
+
+    try {
+      await onUpdateTabAccess(updated);
+    } finally {
+      setSavingTab(null);
+      setTimeout(() => {
+        setNotification(null);
+      }, 3500);
+    }
+  };
+
+  const handleResetAllVisible = async () => {
+    setSavingTab('marketplace');
+    try {
+      await onUpdateTabAccess([]);
+      setNotification('All public tabs have been restored to visible.');
+    } finally {
+      setSavingTab(null);
+      setTimeout(() => {
+        setNotification(null);
+      }, 3500);
+    }
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] flex flex-col md:flex-row bg-[#09090b] text-zinc-100 rounded-xl border border-zinc-800/80 overflow-hidden shadow-2xl my-2">
+      
+      {/* MOBILE TOP BAR (Visible only on small screens) */}
+      <div className="md:hidden flex items-center justify-between border-b border-zinc-800 px-4 py-3 bg-zinc-950">
+        <div className="flex items-center space-x-2.5">
+          <button
+            type="button"
+            id="admin-mobile-menu-btn"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white"
+            aria-label="Open Admin Menu"
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+          <div className="flex items-center space-x-1.5">
+            <span className="font-bold text-sm tracking-tight text-white">LinkPulse</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-950/60 text-red-300 border border-red-900/50">
+              Admin
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onExitToPublic}
+          className="flex items-center space-x-1.5 text-xs text-zinc-400 hover:text-white px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Exit</span>
+        </button>
+      </div>
+
+      {/* MOBILE SIDEBAR DRAWER OVERLAY */}
+      {isMobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <div className="relative flex flex-col w-72 max-w-[85%] bg-[#09090b] border-r border-zinc-800 h-full z-10 p-4">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center space-x-2">
+                <ShieldAlert className="h-4 w-4 text-red-400" />
+                <span className="font-bold text-sm text-white">Admin Console</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Admin User Badge */}
+            <div className="my-4 p-3 rounded-lg bg-zinc-950 border border-zinc-800/80">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-red-400/90 mb-1 flex items-center space-x-1">
+                <Lock className="h-2.5 w-2.5" />
+                <span>Admin Role</span>
+              </div>
+              <p className="text-xs font-mono text-zinc-200 truncate">{displayEmail}</p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">Assigned Administrator</p>
+            </div>
+
+            {/* Navigation items (only one tab for now: tab access) */}
+            <div className="flex-1 space-y-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
+                Management
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-800 text-white border border-zinc-700"
+              >
+                <Sliders className="h-4 w-4 text-zinc-300" />
+                <span>Tab Access</span>
+              </button>
+            </div>
+
+            {/* Bottom actions */}
+            <div className="pt-4 border-t border-zinc-800 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileSidebarOpen(false);
+                  onExitToPublic();
+                }}
+                className="w-full flex items-center justify-center space-x-2 py-2 text-xs font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Back to Public App</span>
+              </button>
+
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSidebarOpen(false);
+                    onSignOut();
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 py-2 text-xs font-medium text-red-400 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 rounded-lg transition-colors"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DEDICATED DESKTOP ADMIN SIDEBAR */}
+      <aside className="hidden md:flex flex-col w-64 border-r border-zinc-800/90 bg-[#09090b] shrink-0 p-5">
+        
+        {/* Top Header */}
+        <div className="pb-5 border-b border-zinc-800/80">
+          <div className="flex items-center space-x-2">
+            <span className="text-lg font-bold tracking-tight text-white">LinkPulse</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-950/70 text-red-300 border border-red-900/60 uppercase tracking-wide">
+              Admin
+            </span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">System Control & Moderation</p>
+        </div>
+
+        {/* Admin Assigned User Card */}
+        <div className="my-5 p-3 rounded-lg bg-zinc-950 border border-zinc-800/80">
+          <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-red-400/90 mb-1">
+            <span className="flex items-center space-x-1">
+              <ShieldAlert className="h-3 w-3 text-red-400" />
+              <span>Admin Role</span>
+            </span>
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </div>
+          <p className="text-xs font-mono text-zinc-200 truncate" title={displayEmail}>{displayEmail}</p>
+          <p className="text-[11px] text-zinc-400 mt-0.5">Assigned to {ADMIN_EMAIL}</p>
+        </div>
+
+        {/* Sidebar Nav (Strictly one tab for now: tab access) */}
+        <nav className="flex-1 space-y-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 pb-2">
+            Admin Navigation
+          </div>
+
+          <button
+            type="button"
+            id="admin-tab-access-nav-btn"
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium bg-zinc-900 text-white border border-zinc-700 shadow-sm"
+          >
+            <div className="flex items-center space-x-2.5">
+              <Sliders className="h-4 w-4 text-zinc-200" strokeWidth={1.5} />
+              <span>Tab Access</span>
+            </div>
+            <span className="h-2 w-2 rounded-full bg-white" />
+          </button>
+        </nav>
+
+        {/* Bottom Actions */}
+        <div className="pt-4 border-t border-zinc-800/80 space-y-2">
+          <button
+            type="button"
+            id="admin-exit-public-btn"
+            onClick={onExitToPublic}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-3 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Return to Public App</span>
+          </button>
+
+          {onSignOut && (
+            <button
+              type="button"
+              id="admin-signout-btn"
+              onClick={onSignOut}
+              className="w-full flex items-center justify-center space-x-2 py-2 px-3 text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/40 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign Out</span>
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* MAIN ADMIN CONTENT AREA */}
+      <main className="flex-1 bg-zinc-950/60 p-4 sm:p-6 lg:p-8 flex flex-col justify-between min-h-0">
+        <div className="space-y-6 max-w-4xl w-full">
+          
+          {/* Notification banner */}
+          {notification && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 shadow-md animate-in fade-in">
+              <div className="flex items-center space-x-2">
+                <Check className="h-4 w-4 text-emerald-400" />
+                <span>{notification}</span>
+              </div>
+              <button 
+                onClick={() => setNotification(null)}
+                className="text-zinc-500 hover:text-white text-xs"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Page Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800">
+            <div>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                  Public Tab Access
+                </h1>
+                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                  {visibleCount} of {PUBLIC_TABS_LIST.length} Visible
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
+                Configure which navigation tabs are visible to public visitors. Changes take effect immediately.
+              </p>
+            </div>
+
+            {hiddenTabs.length > 0 && (
+              <button
+                type="button"
+                id="reset-all-tabs-btn"
+                onClick={handleResetAllVisible}
+                disabled={savingTab !== null}
+                className="self-start sm:self-auto flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer"
+              >
+                <Eye className="h-3.5 w-3.5 text-zinc-400" />
+                <span>Unhide All Tabs</span>
+              </button>
+            )}
+          </div>
+
+          {/* Tab Access Control Cards */}
+          <div className="space-y-3">
+            {PUBLIC_TABS_LIST.map((tab) => {
+              const isHidden = hiddenTabs.includes(tab.id);
+              const isProcessing = savingTab === tab.id;
+              const IconComponent = TAB_ICONS[tab.id] || Sliders;
+
+              return (
+                <div
+                  key={tab.id}
+                  id={`tab-access-card-${tab.id}`}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all duration-200 ${
+                    isHidden
+                      ? 'bg-zinc-900/30 border-zinc-800/60 opacity-85'
+                      : 'bg-zinc-900/80 border-zinc-700/80 shadow-sm'
+                  }`}
+                >
+                  {/* Left info */}
+                  <div className="flex items-start sm:items-center space-x-3.5 mb-3 sm:mb-0">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 border ${
+                      isHidden 
+                        ? 'bg-zinc-950 text-zinc-500 border-zinc-800' 
+                        : 'bg-zinc-800 text-white border-zinc-700'
+                    }`}>
+                      <IconComponent className="h-5 w-5" strokeWidth={1.5} />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-semibold text-white">
+                          {tab.name}
+                        </span>
+                        <span className="font-mono text-[10px] text-zinc-400 bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-800">
+                          /{tab.id}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
+                        {tab.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Status & Toggle */}
+                  <div className="flex items-center space-x-3 self-end sm:self-auto">
+                    {/* Status Badge */}
+                    <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      isHidden
+                        ? 'bg-amber-950/30 text-amber-300 border-amber-800/40'
+                        : 'bg-emerald-950/30 text-emerald-300 border-emerald-800/40'
+                    }`}>
+                      {isHidden ? (
+                        <>
+                          <EyeOff className="h-3 w-3 text-amber-400" />
+                          <span>Hidden from Public</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-3 w-3 text-emerald-400" />
+                          <span>Visible to Public</span>
+                        </>
+                      )}
+                    </span>
+
+                    {/* Action Toggle Button */}
+                    <button
+                      type="button"
+                      id={`toggle-tab-btn-${tab.id}`}
+                      onClick={() => handleToggleTabVisibility(tab.id)}
+                      disabled={isProcessing}
+                      className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
+                        isHidden
+                          ? 'bg-white text-zinc-950 border-white hover:bg-zinc-200'
+                          : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700 hover:text-white'
+                      }`}
+                    >
+                      {isHidden ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5 text-zinc-950" />
+                          <span>{isProcessing ? 'Updating...' : 'Unhide Tab'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="h-3.5 w-3.5 text-zinc-400" />
+                          <span>{isProcessing ? 'Updating...' : 'Hide Tab'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Information & Security Note */}
+          <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 text-xs text-zinc-400 space-y-1.5">
+            <div className="flex items-center space-x-1.5 text-zinc-300 font-medium">
+              <Lock className="h-3.5 w-3.5 text-red-400" />
+              <span>Admin Visibility Protocol</span>
+            </div>
+            <p>
+              When a tab is marked as <strong className="text-zinc-200">Hidden from Public</strong>, regular visitors and unauthenticated users will not see the tab link in either the desktop header or the public mobile drawer.
+            </p>
+            <p className="text-zinc-400">
+              Users signed in with the administrator account (<code className="text-red-300 font-mono">{ADMIN_EMAIL}</code>) can view and navigate to all tabs with a visible badge for testing.
+            </p>
+          </div>
+
+        </div>
+
+        {/* Footer info */}
+        <div className="pt-6 mt-6 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-400">
+          <span>LinkPulse Admin Panel</span>
+          <span>Role: System Administrator ({ADMIN_EMAIL})</span>
+        </div>
+      </main>
+
+    </div>
+  );
+};
