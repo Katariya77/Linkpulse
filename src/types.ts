@@ -191,3 +191,22 @@ export interface ExchangeProposal {
   createdAt: string;
   note?: string;
 }
+
+export type NotificationType = 'match' | 'verification' | 'trust' | 'quest' | 'security' | 'system';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  timestamp: string;
+  timeAgo: string;
+  isRead: boolean;
+  actionTab?: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth';
+  actionLabel?: string;
+  actor?: {
+    name: string;
+    avatar?: string;
+    trustScore?: number;
+  };
+}

@@ -20,6 +20,7 @@ import {
   LogIn,
   LogOut,
   ShieldAlert,
+  Bell,
   User as UserIcon
 } from 'lucide-react';
 import { User, TabAccessConfig } from '../types';
@@ -27,12 +28,13 @@ import { getTrustTier } from '../utils/trustUtils';
 
 interface NavbarProps {
   currentUser: User;
-  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin';
-  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin') => void;
+  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications';
+  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications') => void;
   hasActiveSession: boolean;
   activeRoomCode?: string;
   isAdmin?: boolean;
   tabAccessConfig?: TabAccessConfig;
+  unreadNotificationsCount?: number;
   onOpenTrustInspector: () => void;
   onOpenGoals: () => void;
   onOpenLeaderboard: () => void;
@@ -48,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeRoomCode,
   isAdmin = false,
   tabAccessConfig,
+  unreadNotificationsCount = 0,
   onOpenTrustInspector,
   onOpenGoals,
   onOpenLeaderboard,
@@ -144,6 +147,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: KeyRound,
       badge: currentUser.email ? 'Verified' : 'Firebase',
     },
+    {
+      id: 'notifications' as const,
+      label: 'Notifications',
+      subtitle: unreadNotificationsCount > 0 
+        ? `${unreadNotificationsCount} unread activity alerts` 
+        : 'Activity alerts, proposals & logs',
+      icon: Bell,
+      badge: unreadNotificationsCount > 0 ? `${unreadNotificationsCount} new` : undefined,
+    },
   ];
 
   // Filter public items based on admin settings:
@@ -151,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   // If admin, show all tabs, and note hidden state.
   const navItems = rawNavItems.filter((item) => {
     if (isAdmin) return true;
-    return !hiddenTabs.includes(item.id);
+    return !hiddenTabs.includes(item.id as any);
   });
 
   return (
@@ -380,6 +392,29 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-medium text-zinc-200 tabular-nums">{currentUser.activeStreak}d</span>
           </div>
 
+          {/* Header Notification Icon Button */}
+          <button
+            id="header-notification-bell-btn"
+            type="button"
+            onClick={() => {
+              setActiveTab('notifications');
+              setIsMobileMenuOpen(false);
+            }}
+            title={unreadNotificationsCount > 0 ? `${unreadNotificationsCount} unread notifications` : "Notifications"}
+            className={`relative flex items-center justify-center h-8 w-8 rounded-lg transition-all cursor-pointer border ${
+              activeTab === 'notifications'
+                ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
+                : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 border-zinc-800 hover:border-zinc-700'
+            }`}
+          >
+            <Bell className="h-4 w-4" strokeWidth={1.75} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-zinc-950 shadow-sm ring-2 ring-[#09090b] animate-pulse">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
           {/* User Profile Avatar with Profile Dropdown Menu */}
           <div className="relative pl-1 sm:pl-2 border-l border-zinc-800" ref={profileMenuRef}>
             <button
@@ -423,48 +458,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.96 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute right-0 mt-2 w-64 rounded-xl bg-[#0e0e11] border border-zinc-800 shadow-2xl p-2.5 z-50 text-white"
+                  className="absolute right-0 mt-2 w-56 rounded-xl bg-[#0e0e11] border border-zinc-800 shadow-2xl p-1.5 z-50 text-white"
                 >
-                  {/* Profile Header Identity */}
-                  <div className="p-2 pb-3 flex items-start space-x-3 border-b border-zinc-800/80">
-                    <div className="relative shrink-0">
-                      <img
-                        src={currentUser.avatar}
-                        alt={currentUser.username}
-                        className="h-10 w-10 rounded-lg object-cover border border-zinc-700 grayscale"
-                      />
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#0e0e11] ${
-                          currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
-                        }`}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-sm font-semibold text-white truncate">
-                          {currentUser.username}
-                        </span>
-                        {isAdmin && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-red-950 text-red-300 border border-red-800 shrink-0">
-                            ADMIN
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-zinc-400 truncate mt-0.5">
-                        {currentUser.email || `${currentUser.username.toLowerCase()}@member.linkpulse.io`}
-                      </p>
-                      <div className="flex items-center space-x-1.5 mt-1">
-                        <span className="text-[10px] text-zinc-400">Trust:</span>
-                        <span className="text-[10px] font-semibold text-white tabular-nums">{currentUser.trustScore}/100</span>
-                        <span className={`text-[9px] px-1 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
-                          {trustInfo.tier.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Profile Actions List */}
-                  <div className="py-2 space-y-2">
+                  <div className="space-y-1">
                     {/* 1. Go Online Toggle (if already online, then go offline) */}
                     <button
                       type="button"
@@ -472,27 +468,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                       onClick={() => {
                         onToggleUserStatus();
                       }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer border text-left ${
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium transition-all cursor-pointer border text-left ${
                         currentUser.onlineStatus === 'online'
                           ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60'
                           : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
                       }`}
                     >
-                      <div className="flex items-center space-x-2.5">
-                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                      <div className="flex items-center space-x-2">
+                        <span className="relative flex h-2 w-2 shrink-0">
                           {currentUser.onlineStatus === 'online' && (
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                           )}
-                          <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                          <span className={`relative inline-flex rounded-full h-2 w-2 ${
                             currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
                           }`} />
                         </span>
                         <div>
-                          <span className="font-semibold block text-[13px] text-white">
+                          <span className="font-semibold block text-xs text-white">
                             {currentUser.onlineStatus === 'online' ? 'Go Offline' : 'Go Online'}
                           </span>
                           <span className="text-[10px] text-zinc-400 block">
-                            {currentUser.onlineStatus === 'online' ? 'Currently Online in pool' : 'Currently Offline (Hidden)'}
+                            {currentUser.onlineStatus === 'online' ? 'Status: Online' : 'Status: Offline'}
                           </span>
                         </div>
                       </div>
@@ -515,57 +511,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                         setActiveTab('auth');
                         setIsProfileMenuOpen(false);
                       }}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                      className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
                     >
-                      <div className="flex items-center space-x-2.5">
-                        <div className="h-7 w-7 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
-                          <UserIcon className="h-4 w-4" />
+                      <div className="flex items-center space-x-2">
+                        <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
+                          <UserIcon className="h-3.5 w-3.5" />
                         </div>
-                        <div className="text-left">
-                          <span className="font-semibold block text-[13px] text-white">Profile</span>
-                          <span className="text-[10px] text-zinc-400">View details, stats & settings</span>
-                        </div>
+                        <span className="font-semibold text-xs text-white">Profile</span>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                      <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                     </button>
-
-                    {/* Admin Console Shortcut */}
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        id="profile-dropdown-admin-btn"
-                        onClick={() => {
-                          setActiveTab('admin');
-                          setIsProfileMenuOpen(false);
-                        }}
-                        className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-red-300 hover:text-white hover:bg-red-950/40 border border-transparent hover:border-red-900/50 transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
-                          <span>Admin Console</span>
-                        </div>
-                        <ChevronRight className="h-3 w-3 text-red-400/60" />
-                      </button>
-                    )}
                   </div>
-
-                  {/* Sign Out on Profile */}
-                  {onSignOut && (
-                    <div className="pt-1.5 border-t border-zinc-800/80">
-                      <button
-                        type="button"
-                        id="profile-dropdown-signout-btn"
-                        onClick={() => {
-                          setIsProfileMenuOpen(false);
-                          onSignOut();
-                        }}
-                        className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors cursor-pointer"
-                      >
-                        <LogOut className="h-3.5 w-3.5 text-red-400" />
-                        <span>Sign Out of LinkPulse</span>
-                      </button>
-                    </div>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>

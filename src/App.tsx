@@ -11,6 +11,7 @@ import { LeaderboardPage } from './components/LeaderboardPage';
 import { DailyQuestsPage } from './components/DailyQuestsPage';
 import { AuthPage } from './components/AuthPage';
 import { AdminPanel } from './components/AdminPanel';
+import { NotificationsPage } from './components/NotificationsPage';
 import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
@@ -26,7 +27,8 @@ import {
   PackageType,
   PublicTabId,
   TabAccessConfig,
-  DEFAULT_TAB_ACCESS
+  DEFAULT_TAB_ACCESS,
+  AppNotification
 } from './types';
 import { 
   syncUserProfile, 
@@ -69,9 +71,84 @@ const INITIAL_FALLBACK_USER: User = {
   poolVisibility: true,
 };
 
+const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif-1',
+    type: 'match',
+    title: 'Exchange Match Accepted',
+    message: 'Elena Rostova (Trust 96) accepted your 5x5 shortlink proposal. Room #LP-8821 is active and awaiting link clicks.',
+    timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    timeAgo: '5m ago',
+    isRead: false,
+    actionTab: 'room',
+    actionLabel: 'Enter Room',
+    actor: {
+      name: 'Elena Rostova',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      trustScore: 96,
+    },
+  },
+  {
+    id: 'notif-2',
+    type: 'verification',
+    title: 'Shortlink Click Verified',
+    message: 'Marcus Chen verified your shrinkme.io link with 35s dwell time. Link recorded successfully in session history.',
+    timestamp: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
+    timeAgo: '22m ago',
+    isRead: false,
+    actionTab: 'marketplace',
+    actionLabel: 'View Pool',
+    actor: {
+      name: 'Marcus Chen',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      trustScore: 88,
+    },
+  },
+  {
+    id: 'notif-3',
+    type: 'trust',
+    title: 'Trust Score Rating Upgraded',
+    message: 'Your score was raised to 100/100 (+2pts) for maintaining a 100% completion rate over 10 consecutive exchange sessions.',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    timeAgo: '2h ago',
+    isRead: false,
+    actionTab: 'auth',
+    actionLabel: 'View Trust Profile',
+  },
+  {
+    id: 'notif-4',
+    type: 'quest',
+    title: 'Daily Quest Completed: Speed Runner',
+    message: 'You completed 3 link verifications within the 45s target dwell window today. +150 Community XP collected!',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    timeAgo: '5h ago',
+    isRead: true,
+    actionTab: 'goals',
+    actionLabel: 'Daily Quests',
+  },
+  {
+    id: 'notif-5',
+    type: 'security',
+    title: 'Anti-Cheat Audit Passed',
+    message: 'Automated LinkPulse Telemetry verified tab focus adherence and IP consistency for your recent exchanges.',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    timeAgo: '1d ago',
+    isRead: true,
+  },
+  {
+    id: 'notif-6',
+    type: 'system',
+    title: 'LinkPulse System Update v2.4',
+    message: 'Firestore real-time synchronization is active for online discovery pools and session verification logs.',
+    timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    timeAgo: '2d ago',
+    isRead: true,
+  },
+];
+
 export default function App() {
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin'>('marketplace');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications'>('marketplace');
 
   // Firebase authenticated session state
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
@@ -79,6 +156,45 @@ export default function App() {
 
   // Tab access configuration (synced from Firestore)
   const [tabAccessConfig, setTabAccessConfig] = useState<TabAccessConfig>(DEFAULT_TAB_ACCESS);
+
+  // Notifications State (persisted locally with mock starter data)
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const stored = localStorage.getItem('linkpulse_mock_notifications');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return INITIAL_MOCK_NOTIFICATIONS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('linkpulse_mock_notifications', JSON.stringify(notifications));
+    } catch (e) {}
+  }, [notifications]);
+
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => (n.id === id ? { ...n, isRead: !n.isRead } : n))
+    );
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
+
+  const handleDeleteNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleClearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  const handleResetMockNotifications = () => {
+    setNotifications(INITIAL_MOCK_NOTIFICATIONS);
+  };
+
+  const unreadNotificationsCount = notifications.filter(n => !n.isRead).length;
 
   // User profile & online pool (synced with Firebase Firestore in real time)
   const [currentUser, setCurrentUser] = useState<User>(INITIAL_FALLBACK_USER);
@@ -123,7 +239,7 @@ export default function App() {
 
   // Redirect public visitors if they land on a hidden tab
   useEffect(() => {
-    if (!isAdmin && activeTab !== 'admin' && tabAccessConfig.hiddenTabs.includes(activeTab)) {
+    if (!isAdmin && activeTab !== 'admin' && activeTab !== 'notifications' && tabAccessConfig.hiddenTabs.includes(activeTab as any)) {
       const publicFallback = (['marketplace', 'room', 'leaderboard', 'goals', 'auth'] as PublicTabId[]).find(
         (id) => !tabAccessConfig.hiddenTabs.includes(id)
       );
@@ -668,6 +784,7 @@ export default function App() {
         activeRoomCode={activeSession?.roomCode}
         isAdmin={isAdmin}
         tabAccessConfig={tabAccessConfig}
+        unreadNotificationsCount={unreadNotificationsCount}
         onOpenTrustInspector={() => setShowTrustInspector(true)}
         onOpenGoals={() => setActiveTab('goals')}
         onOpenLeaderboard={() => setActiveTab('leaderboard')}
@@ -843,6 +960,20 @@ export default function App() {
               </div>
             </div>
           )
+        )}
+
+        {/* Tab 7: Dedicated Notifications & Activity Page */}
+        {activeTab === 'notifications' && (
+          <NotificationsPage
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onDeleteNotification={handleDeleteNotification}
+            onClearAllNotifications={handleClearAllNotifications}
+            onResetMockNotifications={handleResetMockNotifications}
+            onNavigateToTab={(tab) => setActiveTab(tab)}
+            onBack={() => setActiveTab('marketplace')}
+          />
         )}
 
       </main>

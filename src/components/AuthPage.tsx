@@ -34,8 +34,6 @@ import {
   loginWithEmail, 
   registerWithEmail, 
   logoutUser, 
-  isFirebaseConfigured, 
-  firebaseConfig, 
   AuthSessionUser 
 } from '../lib/firebase';
 import { User } from '../types';
@@ -296,13 +294,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
           {/* Real-time Status Badge */}
           <div className="flex items-center space-x-2">
-            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
-              <span className={`h-2 w-2 rounded-full shrink-0 ${isFirebaseConfigured ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span className="font-mono text-zinc-300 font-medium">{firebaseConfig.projectId}</span>
-              <span className="text-zinc-600">/</span>
-              <span className="font-mono text-zinc-400">{firebaseConfig.firestoreDatabaseId || 'linkpulse-db'}</span>
-            </div>
-
             <button
               type="button"
               onClick={onToggleUserStatus}
