@@ -242,20 +242,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Back to Public App</span>
               </button>
-
-              {onSignOut && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileSidebarOpen(false);
-                    onSignOut();
-                  }}
-                  className="w-full flex items-center justify-center space-x-2 py-2 text-xs font-medium text-red-400 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 rounded-lg transition-colors cursor-pointer"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span>Sign Out</span>
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -318,18 +304,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Return to Public App</span>
           </button>
-
-          {onSignOut && (
-            <button
-              type="button"
-              id="admin-signout-btn"
-              onClick={onSignOut}
-              className="w-full flex items-center justify-center space-x-2 py-2 px-3 text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/40 rounded-lg transition-colors cursor-pointer"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Sign Out</span>
-            </button>
-          )}
         </div>
       </aside>
 

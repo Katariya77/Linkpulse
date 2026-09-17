@@ -100,6 +100,9 @@ export interface User {
   authProvider?: 'google' | 'password' | 'demo';
   isFavorite?: boolean;
   notes?: string;
+  soundAlerts?: boolean;
+  autoAcceptMatches?: boolean;
+  poolVisibility?: boolean;
 }
 
 export interface ExchangeLink {

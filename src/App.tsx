@@ -16,6 +16,7 @@ import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
 import { 
   User, 
+  UserStatus,
   ExchangeSession, 
   ExchangeLink, 
   TrustLedgerEntry, 
@@ -63,6 +64,9 @@ const INITIAL_FALLBACK_USER: User = {
   country: 'United States',
   countryCode: 'US',
   joinedDate: 'Today',
+  soundAlerts: true,
+  autoAcceptMatches: false,
+  poolVisibility: true,
 };
 
 export default function App() {
@@ -559,14 +563,26 @@ export default function App() {
   };
 
   const handleToggleUserStatus = () => {
-    const nextStatus = currentUser.onlineStatus === 'online' ? 'away' : 'online';
+    const nextStatus: UserStatus = currentUser.onlineStatus === 'online' ? 'offline' : 'online';
     setCurrentUser(prev => ({
       ...prev,
       onlineStatus: nextStatus,
     }));
     if (sessionUser) {
-      updateUserProfileInFirestore(sessionUser.uid, { onlineStatus: nextStatus });
+      updateUserProfileInFirestore(sessionUser.uid, { onlineStatus: nextStatus }).catch(console.error);
     }
+    showToast(`Status changed to ${nextStatus.toUpperCase()}`, 'info');
+  };
+
+  const handleUpdateUser = (updates: Partial<User>) => {
+    setCurrentUser(prev => ({
+      ...prev,
+      ...updates,
+    }));
+    if (sessionUser) {
+      updateUserProfileInFirestore(sessionUser.uid, updates).catch(console.error);
+    }
+    showToast('Profile updated successfully.', 'success');
   };
 
   const handleUpdateSession = (updated: ExchangeSession) => {
@@ -633,6 +649,8 @@ export default function App() {
           }}
           onSignOut={handleSignOut}
           onNavigateToApp={() => {}}
+          onUpdateUser={handleUpdateUser}
+          onToggleUserStatus={handleToggleUserStatus}
         />
       </div>
     );
@@ -768,6 +786,8 @@ export default function App() {
             }}
             onSignOut={handleSignOut}
             onNavigateToApp={() => setActiveTab('marketplace')}
+            onUpdateUser={handleUpdateUser}
+            onToggleUserStatus={handleToggleUserStatus}
           />
         )}
 

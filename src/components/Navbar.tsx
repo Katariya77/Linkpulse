@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { 
@@ -19,7 +19,8 @@ import {
   KeyRound,
   LogIn,
   LogOut,
-  ShieldAlert
+  ShieldAlert,
+  User as UserIcon
 } from 'lucide-react';
 import { User, TabAccessConfig } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
@@ -55,11 +56,28 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [mounted, setMounted] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const trustInfo = getTrustTier(currentUser.trustScore);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isProfileMenuOpen]);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -329,18 +347,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {onSignOut && (
-            <button
-              id="header-signout-btn"
-              onClick={onSignOut}
-              title="Sign Out of LinkPulse"
-              className="hidden sm:flex items-center space-x-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer"
-            >
-              <LogOut className="h-3 w-3 text-zinc-400" strokeWidth={1.5} />
-              <span className="text-[11px]">Sign Out</span>
-            </button>
-          )}
-
           {/* Trust Score Pill beside Profile */}
           {(isAdmin || !tabAccessConfig?.hideHeaderTrust) && (
             <button
@@ -374,37 +380,195 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-medium text-zinc-200 tabular-nums">{currentUser.activeStreak}d</span>
           </div>
 
-          {/* User Profile Avatar */}
-          <div className="flex items-center space-x-2 pl-1 sm:pl-2 border-l border-zinc-800">
+          {/* User Profile Avatar with Profile Dropdown Menu */}
+          <div className="relative pl-1 sm:pl-2 border-l border-zinc-800" ref={profileMenuRef}>
             <button
-              onClick={onToggleUserStatus}
-              title={`Status: ${currentUser.onlineStatus}. Click to toggle status.`}
-              className="relative cursor-pointer focus:outline-none"
+              id="header-profile-menu-trigger"
+              onClick={() => setIsProfileMenuOpen(prev => !prev)}
+              title="Open Profile Menu & Settings"
+              className="flex items-center space-x-1.5 focus:outline-none cursor-pointer group"
             >
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.username}
-                className="h-7 w-7 rounded-md object-cover border border-zinc-800 grayscale"
-              />
-              <span
-                className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ${
-                  currentUser.onlineStatus === 'online'
-                    ? 'bg-zinc-200 ring-1 ring-zinc-950'
-                    : 'bg-zinc-600 ring-1 ring-zinc-950'
-                }`}
-              />
+              <div className="relative">
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.username}
+                  className="h-7 w-7 rounded-md object-cover border border-zinc-800 group-hover:border-zinc-600 transition-colors grayscale"
+                />
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ${
+                    currentUser.onlineStatus === 'online'
+                      ? 'bg-zinc-200 ring-1 ring-zinc-950'
+                      : 'bg-zinc-600 ring-1 ring-zinc-950'
+                  }`}
+                />
+              </div>
+
+              <div className="hidden lg:flex items-center space-x-1 text-left">
+                <span className="text-xs font-medium text-zinc-300 group-hover:text-white transition-colors">
+                  {currentUser.username}
+                </span>
+                <ChevronDown 
+                  className={`h-3 w-3 text-zinc-500 group-hover:text-zinc-300 transition-transform duration-150 ${isProfileMenuOpen ? 'rotate-180 text-white' : ''}`} 
+                  strokeWidth={1.5} 
+                />
+              </div>
             </button>
 
-            <div className="hidden lg:block text-left">
-              <button
-                id="toggle-online-status-btn"
-                onClick={onToggleUserStatus}
-                className="flex items-center space-x-1 text-xs text-zinc-300 hover:text-white transition-colors"
-              >
-                <span className="font-medium">{currentUser.username}</span>
-                <ChevronDown className="h-3 w-3 text-zinc-500" strokeWidth={1.5} />
-              </button>
-            </div>
+            {/* Profile Dropdown Menu */}
+            <AnimatePresence>
+              {isProfileMenuOpen && (
+                <motion.div
+                  id="header-profile-dropdown"
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="absolute right-0 mt-2 w-64 rounded-xl bg-[#0e0e11] border border-zinc-800 shadow-2xl p-2.5 z-50 text-white"
+                >
+                  {/* Profile Header Identity */}
+                  <div className="p-2 pb-3 flex items-start space-x-3 border-b border-zinc-800/80">
+                    <div className="relative shrink-0">
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser.username}
+                        className="h-10 w-10 rounded-lg object-cover border border-zinc-700 grayscale"
+                      />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#0e0e11] ${
+                          currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
+                        }`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-sm font-semibold text-white truncate">
+                          {currentUser.username}
+                        </span>
+                        {isAdmin && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-red-950 text-red-300 border border-red-800 shrink-0">
+                            ADMIN
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 truncate mt-0.5">
+                        {currentUser.email || `${currentUser.username.toLowerCase()}@member.linkpulse.io`}
+                      </p>
+                      <div className="flex items-center space-x-1.5 mt-1">
+                        <span className="text-[10px] text-zinc-400">Trust:</span>
+                        <span className="text-[10px] font-semibold text-white tabular-nums">{currentUser.trustScore}/100</span>
+                        <span className={`text-[9px] px-1 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
+                          {trustInfo.tier.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profile Actions List */}
+                  <div className="py-2 space-y-2">
+                    {/* 1. Go Online Toggle (if already online, then go offline) */}
+                    <button
+                      type="button"
+                      id="profile-dropdown-toggle-status-btn"
+                      onClick={() => {
+                        onToggleUserStatus();
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer border text-left ${
+                        currentUser.onlineStatus === 'online'
+                          ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60'
+                          : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <span className="relative flex h-2.5 w-2.5 shrink-0">
+                          {currentUser.onlineStatus === 'online' && (
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          )}
+                          <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                            currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
+                          }`} />
+                        </span>
+                        <div>
+                          <span className="font-semibold block text-[13px] text-white">
+                            {currentUser.onlineStatus === 'online' ? 'Go Offline' : 'Go Online'}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 block">
+                            {currentUser.onlineStatus === 'online' ? 'Currently Online in pool' : 'Currently Offline (Hidden)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Visual switch toggle */}
+                      <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors shrink-0 ${
+                        currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-700'
+                      }`}>
+                        <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                          currentUser.onlineStatus === 'online' ? 'translate-x-3.5' : 'translate-x-0'
+                        }`} />
+                      </div>
+                    </button>
+
+                    {/* 2. Profile (clicking on it will redirect to profile page) */}
+                    <button
+                      type="button"
+                      id="profile-dropdown-view-profile-btn"
+                      onClick={() => {
+                        setActiveTab('auth');
+                        setIsProfileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="h-7 w-7 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
+                          <UserIcon className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <span className="font-semibold block text-[13px] text-white">Profile</span>
+                          <span className="text-[10px] text-zinc-400">View details, stats & settings</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                    </button>
+
+                    {/* Admin Console Shortcut */}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        id="profile-dropdown-admin-btn"
+                        onClick={() => {
+                          setActiveTab('admin');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-red-300 hover:text-white hover:bg-red-950/40 border border-transparent hover:border-red-900/50 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <ShieldAlert className="h-3.5 w-3.5 text-red-400" />
+                          <span>Admin Console</span>
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-red-400/60" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sign Out on Profile */}
+                  {onSignOut && (
+                    <div className="pt-1.5 border-t border-zinc-800/80">
+                      <button
+                        type="button"
+                        id="profile-dropdown-signout-btn"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          onSignOut();
+                        }}
+                        className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="h-3.5 w-3.5 text-red-400" />
+                        <span>Sign Out of LinkPulse</span>
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Mobile & Tablet Sidebar Toggle Button */}
@@ -617,20 +781,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                   {/* Bottom Actions */}
                   <div className="pt-4 border-t border-zinc-800/80 space-y-2">
-                    {onSignOut && (
-                      <button
-                        type="button"
-                        id="sidebar-signout-btn"
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          onSignOut();
-                        }}
-                        className="w-full py-2.5 rounded-xl text-center text-sm font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/40 transition-colors flex items-center justify-center space-x-2 cursor-pointer"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        <span>Sign Out of LinkPulse</span>
-                      </button>
-                    )}
                     <button
                       type="button"
                       id="sidebar-close-footer-btn"
