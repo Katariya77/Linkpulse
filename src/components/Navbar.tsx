@@ -295,61 +295,75 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right User Telemetry & Menu Button */}
         <div className="flex items-center space-x-2 sm:space-x-2.5">
           
-          {/* Quick Auth Trigger Button */}
-          <button
-            id="header-auth-trigger-btn"
-            onClick={() => setActiveTab('auth')}
-            title={currentUser.email ? `Signed in as ${currentUser.email}` : "Sign In with Google or Email"}
-            className={`flex items-center space-x-1.5 rounded-md px-2 sm:px-2.5 py-1 text-xs font-medium transition-colors border ${
-              activeTab === 'auth'
-                ? 'bg-zinc-800 text-white border-zinc-600'
-                : currentUser.email
-                ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:text-white'
-                : 'bg-white text-zinc-950 border-white hover:bg-zinc-200 font-semibold'
-            }`}
-          >
-            {currentUser.email ? (
-              <>
-                <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-                <span className="hidden sm:inline text-zinc-300 text-[11px]">Account</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              </>
-            ) : (
-              <>
-                <LogIn className="h-3.5 w-3.5" strokeWidth={2} />
-                <span>Sign In</span>
-              </>
-            )}
-          </button>
+          {/* Quick Auth Trigger Button (Key Icon beside Profile) */}
+          {(isAdmin || !tabAccessConfig?.hideHeaderAuthKey) && (
+            <button
+              id="header-auth-trigger-btn"
+              onClick={() => setActiveTab('auth')}
+              title={currentUser.email ? `Signed in as ${currentUser.email}` : "Sign In with Google or Email"}
+              className={`flex items-center space-x-1.5 rounded-md px-2 sm:px-2.5 py-1 text-xs font-medium transition-colors border cursor-pointer ${
+                activeTab === 'auth'
+                  ? 'bg-zinc-800 text-white border-zinc-600'
+                  : currentUser.email
+                  ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:text-white'
+                  : 'bg-white text-zinc-950 border-white hover:bg-zinc-200 font-semibold'
+              }`}
+            >
+              {currentUser.email ? (
+                <>
+                  <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                  <span className="hidden sm:inline text-zinc-300 text-[11px]">Account</span>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Sign In</span>
+                </>
+              )}
+              {isAdmin && tabAccessConfig?.hideHeaderAuthKey && (
+                <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
+                  Hidden
+                </span>
+              )}
+            </button>
+          )}
 
           {onSignOut && (
             <button
               id="header-signout-btn"
               onClick={onSignOut}
               title="Sign Out of LinkPulse"
-              className="hidden sm:flex items-center space-x-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"
+              className="hidden sm:flex items-center space-x-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer"
             >
               <LogOut className="h-3 w-3 text-zinc-400" strokeWidth={1.5} />
               <span className="text-[11px]">Sign Out</span>
             </button>
           )}
 
-          {/* Trust Score Pill */}
-          <button
-            id="trust-score-badge-btn"
-            onClick={onOpenTrustInspector}
-            title="Inspect Trust Score"
-            className="flex items-center space-x-1.5 sm:space-x-2 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 sm:px-2.5 py-1 transition-colors text-xs shrink-0"
-          >
-            <Shield className="h-3.5 w-3.5 text-zinc-300 shrink-0" strokeWidth={1.5} />
-            <div className="flex items-center space-x-1">
-              <span className="hidden min-[420px]:inline text-zinc-500 text-[10px]">TRUST</span>
-              <span className="font-semibold text-white tabular-nums">{currentUser.trustScore}</span>
-            </div>
-            <span className={`hidden sm:inline-block text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
-              {trustInfo.tier.toUpperCase()}
-            </span>
-          </button>
+          {/* Trust Score Pill beside Profile */}
+          {(isAdmin || !tabAccessConfig?.hideHeaderTrust) && (
+            <button
+              id="trust-score-badge-btn"
+              onClick={onOpenTrustInspector}
+              title="Inspect Trust Score"
+              className="flex items-center space-x-1.5 sm:space-x-2 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 sm:px-2.5 py-1 transition-colors text-xs shrink-0 cursor-pointer"
+            >
+              <Shield className="h-3.5 w-3.5 text-zinc-300 shrink-0" strokeWidth={1.5} />
+              <div className="flex items-center space-x-1">
+                <span className="hidden min-[420px]:inline text-zinc-500 text-[10px]">TRUST</span>
+                <span className="font-semibold text-white tabular-nums">{currentUser.trustScore}</span>
+              </div>
+              <span className={`hidden sm:inline-block text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
+                {trustInfo.tier.toUpperCase()}
+              </span>
+              {isAdmin && tabAccessConfig?.hideHeaderTrust && (
+                <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
+                  Hidden
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Active Streak */}
           <div 

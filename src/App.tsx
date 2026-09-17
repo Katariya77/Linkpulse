@@ -778,16 +778,16 @@ export default function App() {
               currentUser={currentUser}
               sessionUser={sessionUser}
               tabAccess={tabAccessConfig}
-              onUpdateTabAccess={async (newHiddenTabs) => {
+              onUpdateTabAccess={async (update) => {
                 try {
                   await saveTabAccessInFirestore(
-                    newHiddenTabs,
+                    update,
                     sessionUser?.email || currentUser.email || ADMIN_EMAIL
                   );
-                  showToast('Tab access settings saved in real time.', 'success');
+                  showToast('Visibility settings saved in real time.', 'success');
                 } catch (err: any) {
                   console.error('Error saving tab access:', err);
-                  showToast('Failed to save tab access.', 'alert');
+                  showToast('Failed to save visibility settings.', 'alert');
                 }
               }}
               onExitToPublic={() => setActiveTab('marketplace')}

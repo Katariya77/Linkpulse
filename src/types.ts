@@ -7,13 +7,39 @@ export type PublicTabId = 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'au
 
 export interface TabAccessConfig {
   hiddenTabs: PublicTabId[];
+  hideHeaderTrust?: boolean;
+  hideHeaderAuthKey?: boolean;
   updatedAt?: string;
   updatedBy?: string;
 }
 
 export const DEFAULT_TAB_ACCESS: TabAccessConfig = {
   hiddenTabs: [],
+  hideHeaderTrust: false,
+  hideHeaderAuthKey: false,
 };
+
+export interface HeaderElementMeta {
+  id: 'trust' | 'key';
+  name: string;
+  description: string;
+  location: string;
+}
+
+export const HEADER_ELEMENTS_LIST: HeaderElementMeta[] = [
+  {
+    id: 'trust',
+    name: 'Trust Score Badge',
+    description: 'Displays the user trust rating pill and breakdown inspector beside the profile avatar',
+    location: 'Top header, next to profile avatar',
+  },
+  {
+    id: 'key',
+    name: 'Key & Account Trigger',
+    description: 'Displays the quick sign-in / account status button with key icon beside the profile avatar',
+    location: 'Top header, next to profile avatar',
+  },
+];
 
 export interface PublicTabMeta {
   id: PublicTabId;

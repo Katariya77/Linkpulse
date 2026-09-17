@@ -590,6 +590,8 @@ export function subscribeToTabAccess(onUpdate: (config: TabAccessConfig) => void
       const data = snap.data();
       const config: TabAccessConfig = {
         hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : [],
+        hideHeaderTrust: Boolean(data.hideHeaderTrust),
+        hideHeaderAuthKey: Boolean(data.hideHeaderAuthKey),
         updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || undefined,
         updatedBy: data.updatedBy,
       };
@@ -606,17 +608,46 @@ export function subscribeToTabAccess(onUpdate: (config: TabAccessConfig) => void
 }
 
 /**
- * Saves updated tab access visibility to Firestore.
+ * Saves updated tab access visibility and header elements to Firestore.
  */
 export async function saveTabAccessInFirestore(
-  hiddenTabs: PublicTabId[],
-  updatedByEmail?: string
+  update: Partial<TabAccessConfig> | PublicTabId[],
+  updatedByEmail?: string,
+  extraOptions?: { hideHeaderTrust?: boolean; hideHeaderAuthKey?: boolean }
 ): Promise<void> {
+  let hiddenTabs: PublicTabId[] = [];
+  let hideHeaderTrust = false;
+  let hideHeaderAuthKey = false;
+
+  // Read current cached config as fallback base
+  try {
+    const cached = localStorage.getItem('linkpulse_tab_access');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed.hiddenTabs)) hiddenTabs = parsed.hiddenTabs;
+      if (typeof parsed.hideHeaderTrust === 'boolean') hideHeaderTrust = parsed.hideHeaderTrust;
+      if (typeof parsed.hideHeaderAuthKey === 'boolean') hideHeaderAuthKey = parsed.hideHeaderAuthKey;
+    }
+  } catch (e) {}
+
+  if (Array.isArray(update)) {
+    hiddenTabs = update;
+    if (extraOptions?.hideHeaderTrust !== undefined) hideHeaderTrust = extraOptions.hideHeaderTrust;
+    if (extraOptions?.hideHeaderAuthKey !== undefined) hideHeaderAuthKey = extraOptions.hideHeaderAuthKey;
+  } else if (typeof update === 'object' && update !== null) {
+    if (Array.isArray(update.hiddenTabs)) hiddenTabs = update.hiddenTabs;
+    if (update.hideHeaderTrust !== undefined) hideHeaderTrust = update.hideHeaderTrust;
+    if (update.hideHeaderAuthKey !== undefined) hideHeaderAuthKey = update.hideHeaderAuthKey;
+  }
+
   const config: TabAccessConfig = {
     hiddenTabs,
+    hideHeaderTrust,
+    hideHeaderAuthKey,
     updatedAt: new Date().toISOString(),
     updatedBy: updatedByEmail || 'admin',
   };
+
   try {
     localStorage.setItem('linkpulse_tab_access', JSON.stringify(config));
   } catch (e) {}
@@ -625,6 +656,8 @@ export async function saveTabAccessInFirestore(
   const docRef = doc(db, SETTINGS_COLLECTION, TAB_ACCESS_DOC);
   await setDoc(docRef, {
     hiddenTabs,
+    hideHeaderTrust,
+    hideHeaderAuthKey,
     updatedAt: serverTimestamp(),
     updatedBy: updatedByEmail || 'admin',
   }, { merge: true });
