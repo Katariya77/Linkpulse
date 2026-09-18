@@ -15,6 +15,8 @@ import { NotificationsPage } from './components/NotificationsPage';
 import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
+import { WaitingExchangeScreen } from './components/WaitingExchangeScreen';
+import { RequestTimeoutModal } from './components/RequestTimeoutModal';
 import { 
   User, 
   UserStatus,
@@ -24,6 +26,7 @@ import {
   IPCooldownRecord, 
   DailyGoal, 
   ExchangeProposal, 
+  OutgoingInvitation,
   PackageType,
   PublicTabId,
   TabAccessConfig,
@@ -212,6 +215,11 @@ export default function App() {
   // Incoming proposal (real-time Firestore synced)
   const [incomingProposal, setIncomingProposal] = useState<ExchangeProposal | null>(null);
 
+  // Outgoing exchange invitation state & 30s countdown
+  const [outgoingInvitation, setOutgoingInvitation] = useState<OutgoingInvitation | null>(null);
+  const [inviteSecondsRemaining, setInviteSecondsRemaining] = useState<number>(30);
+  const [timeoutPartner, setTimeoutPartner] = useState<User | null>(null);
+
   // Modals state
   const [showDisputeModal, setShowDisputeModal] = useState<boolean>(false);
   const [showTrustInspector, setShowTrustInspector] = useState<boolean>(false);
@@ -356,11 +364,237 @@ export default function App() {
     }
   };
 
-  // Handle Propose Exchange Action
+  // Handle Propose Exchange Action (fallback modal)
   const handleOpenProposeModal = (partner: User) => {
     setProposePartner(partner);
     setActiveTab('room');
   };
+
+  // Handle Invite to Exchange: Sends request to User B and displays waiting screen to User A
+  const handleInviteToExchange = async (partner: User) => {
+    // Check if cooldown is active
+    const cooldownRecord = ipCooldowns.find(c => c.partnerId === partner.id);
+    if (cooldownRecord && new Date(cooldownRecord.expiresAt).getTime() > Date.now()) {
+      showToast(`24-hour IP cooldown active with @${partner.username}. Please select another peer.`, 'alert');
+      return;
+    }
+
+    const shortener1 = currentUser.preferredShorteners?.[0] || 'shrinkme.io';
+    const shortener2 = currentUser.preferredShorteners?.[1] || 'ouo.io';
+    const senderLinks = [
+      `https://${shortener1}/ref-${currentUser.username.toLowerCase()}-dl1`,
+      `https://${shortener1}/ref-${currentUser.username.toLowerCase()}-dl2`,
+      `https://${shortener2}/ref-${currentUser.username.toLowerCase()}-pk3`,
+      `https://${shortener1}/ref-${currentUser.username.toLowerCase()}-dl4`,
+      `https://${shortener2}/ref-${currentUser.username.toLowerCase()}-pk5`,
+    ];
+
+    let sessionId = `ses_${Date.now()}`;
+    if (sessionUser) {
+      try {
+        sessionId = await sendExchangeProposalToFirestore(
+          currentUser,
+          partner,
+          '5x5',
+          30,
+          senderLinks,
+          'Ready for instant 5x5 link exchange verification.'
+        );
+      } catch (err) {
+        console.warn('Failed to send proposal to Firestore:', err);
+      }
+    }
+
+    const invitation: OutgoingInvitation = {
+      sessionId,
+      partner,
+      packageType: '5x5',
+      dwellTime: 30,
+      senderLinks,
+      createdAt: Date.now(),
+      status: 'pending',
+    };
+
+    setOutgoingInvitation(invitation);
+    setInviteSecondsRemaining(30);
+    setActiveTab('marketplace');
+
+    // Add activity notification
+    const newNotif: AppNotification = {
+      id: `notif-${Date.now()}`,
+      type: 'match',
+      title: 'Exchange Invitation Sent',
+      message: `Sent 5x5 exchange invitation to @${partner.username}. Awaiting response...`,
+      timestamp: new Date().toISOString(),
+      timeAgo: 'Just now',
+      isRead: false,
+      actionTab: 'marketplace',
+      actionLabel: 'Discovery Pool',
+      actor: {
+        name: partner.username,
+        avatar: partner.avatar,
+        trustScore: partner.trustScore,
+      },
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+    showToast(`Exchange invitation sent to @${partner.username}. Waiting for acceptance...`, 'info');
+  };
+
+  // Cancel Outgoing Invitation
+  const handleCancelOutgoingInvitation = () => {
+    if (outgoingInvitation && sessionUser && outgoingInvitation.sessionId.startsWith('ses_')) {
+      updateSessionInFirestore(outgoingInvitation.sessionId, { status: 'cancelled' }).catch(() => {});
+    }
+    setOutgoingInvitation(null);
+    showToast('Exchange invitation cancelled.', 'info');
+  };
+
+  // Simulate Peer Acceptance (for single-tab development preview evaluation)
+  const handleSimulatePeerAccept = () => {
+    if (!outgoingInvitation) return;
+    const partner = outgoingInvitation.partner;
+    const count = 5;
+    const dwellTime = 30;
+
+    const userLinks: ExchangeLink[] = outgoingInvitation.senderLinks.map((url, i) => ({
+      id: `usr_link_${i + 1}`,
+      url,
+      shortenerName: extractDomain(url),
+      status: 'pending',
+      dwellTimeRequired: dwellTime,
+      dwellTimeRemaining: dwellTime,
+      isOpened: false,
+    }));
+
+    const partnerBase = [
+      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/media-release-v2`,
+      `https://${partner.preferredShorteners[1] || 'ouo.io'}/crypto-bonus-pack`,
+      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/direct-download-mirror`,
+      `https://${partner.preferredShorteners[1] || 'ouo.io'}/software-key-patch`,
+      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/tech-setup-notes`,
+    ];
+
+    const partnerLinks: ExchangeLink[] = partnerBase.slice(0, count).map((url, i) => ({
+      id: `ptr_link_${i + 1}`,
+      url,
+      shortenerName: extractDomain(url),
+      status: 'pending',
+      dwellTimeRequired: dwellTime,
+      dwellTimeRemaining: dwellTime,
+      isOpened: false,
+    }));
+
+    const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
+    const roomCode = `#LP-${randomRoomNumber}`;
+    const sessionId = outgoingInvitation.sessionId;
+
+    const newSession: ExchangeSession = {
+      id: sessionId,
+      roomCode,
+      partner,
+      packageType: '5x5',
+      dwellTimeSeconds: dwellTime,
+      status: 'active',
+      userLinks,
+      partnerLinks,
+      partnerTelemetry: {
+        currentLinkIndex: 0,
+        currentLinkStatus: 'waiting',
+        secondsRemaining: dwellTime,
+        completedCount: 0,
+        totalCount: count,
+        lastActionText: 'Peer connected. Real-time Firebase room synchronized.',
+        latencyMs: 14,
+      },
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+    };
+
+    if (sessionUser && sessionId.startsWith('ses_')) {
+      updateSessionInFirestore(sessionId, newSession).catch(() => {});
+    }
+
+    setActiveSession(newSession);
+    setOutgoingInvitation(null);
+    setActiveTab('room');
+    showToast(`@${partner.username} accepted! Entering room ${roomCode}`, 'success');
+  };
+
+  // Monitor 30-second countdown for outgoing exchange invitation & subscribe to session updates
+  useEffect(() => {
+    if (!outgoingInvitation || outgoingInvitation.status !== 'pending') {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setInviteSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // 30-second acceptance timeout exceeded!
+          const expiredPartner = outgoingInvitation.partner;
+          if (sessionUser && outgoingInvitation.sessionId.startsWith('ses_')) {
+            updateSessionInFirestore(outgoingInvitation.sessionId, { status: 'cancelled' }).catch(() => {});
+          }
+          setOutgoingInvitation(null);
+          setTimeoutPartner(expiredPartner);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    let unsubscribeSession = () => {};
+    if (sessionUser && outgoingInvitation.sessionId.startsWith('ses_')) {
+      unsubscribeSession = subscribeToExchangeSession(outgoingInvitation.sessionId, (liveSession) => {
+        if (!liveSession) return;
+
+        if (liveSession.status === 'active') {
+          clearInterval(timer);
+          const userLinks = outgoingInvitation.senderLinks.map((url, i) => ({
+            id: `usr_link_${i + 1}`,
+            url,
+            shortenerName: extractDomain(url),
+            status: 'pending' as const,
+            dwellTimeRequired: outgoingInvitation.dwellTime,
+            dwellTimeRemaining: outgoingInvitation.dwellTime,
+            isOpened: false,
+          }));
+
+          const partnerLinks = Array.isArray(liveSession.userLinks) && liveSession.userLinks.length > 0
+            ? liveSession.userLinks
+            : outgoingInvitation.partner.preferredShorteners.map((sh, i) => ({
+                id: `ptr_link_${i + 1}`,
+                url: `https://${sh}/dest-${i + 1}`,
+                shortenerName: sh,
+                status: 'pending' as const,
+                dwellTimeRequired: outgoingInvitation.dwellTime,
+                dwellTimeRemaining: outgoingInvitation.dwellTime,
+                isOpened: false,
+              }));
+
+          const synchronizedSession: ExchangeSession = {
+            ...liveSession,
+            partner: outgoingInvitation.partner,
+            userLinks,
+            partnerLinks,
+          };
+
+          setActiveSession(synchronizedSession);
+          setOutgoingInvitation(null);
+          setActiveTab('room');
+          showToast(`@${outgoingInvitation.partner.username} accepted your exchange! Entering room...`, 'success');
+        } else if (liveSession.status === 'cancelled') {
+          clearInterval(timer);
+          setOutgoingInvitation(prev => prev ? { ...prev, status: 'declined' } : null);
+        }
+      });
+    }
+
+    return () => {
+      clearInterval(timer);
+      unsubscribeSession();
+    };
+  }, [outgoingInvitation?.sessionId, outgoingInvitation?.status, sessionUser]);
 
   // Launch Room from Proposal
   const handleLaunchProposal = (
@@ -448,7 +682,20 @@ export default function App() {
   // Accept Incoming Proposal
   const handleAcceptIncomingProposal = (proposal: ExchangeProposal) => {
     const count = proposal.packageType === '5x5' ? 5 : 10;
-    const baseUserLinks: string[] = Array(count).fill('');
+    const shortenerB1 = currentUser.preferredShorteners?.[0] || 'shrinkme.io';
+    const shortenerB2 = currentUser.preferredShorteners?.[1] || 'ouo.io';
+    const baseUserLinks: string[] = [
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl1`,
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl2`,
+      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk3`,
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl4`,
+      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk5`,
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl6`,
+      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk7`,
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl8`,
+      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk9`,
+      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl10`,
+    ];
 
     const userLinks: ExchangeLink[] = baseUserLinks.slice(0, count).map((url, i) => ({
       id: `usr_link_${i + 1}`,
@@ -810,18 +1057,30 @@ export default function App() {
         
         {/* Tab 1: Marketplace / Online Discovery Pool */}
         {activeTab === 'marketplace' && (
-          <DiscoveryPool
-            currentUser={currentUser}
-            peers={peers}
-            ipCooldowns={ipCooldowns}
-            incomingProposal={incomingProposal}
-            onProposeExchange={handleOpenProposeModal}
-            onAcceptProposal={handleAcceptIncomingProposal}
-            onDeclineProposal={handleDeclineIncomingProposal}
-            onSimulateIncomingProposal={handleSimulateNewIncomingProposal}
-            onToggleFavorite={handleToggleFavorite}
-            onOpenTrustInspector={() => setShowTrustInspector(true)}
-          />
+          outgoingInvitation ? (
+            <WaitingExchangeScreen
+              partner={outgoingInvitation.partner}
+              packageType={outgoingInvitation.packageType}
+              dwellTime={outgoingInvitation.dwellTime}
+              secondsRemaining={inviteSecondsRemaining}
+              isDeclined={outgoingInvitation.status === 'declined'}
+              onCancel={handleCancelOutgoingInvitation}
+              onSimulateAccept={handleSimulatePeerAccept}
+            />
+          ) : (
+            <DiscoveryPool
+              currentUser={currentUser}
+              peers={peers}
+              ipCooldowns={ipCooldowns}
+              incomingProposal={incomingProposal}
+              onProposeExchange={handleInviteToExchange}
+              onAcceptProposal={handleAcceptIncomingProposal}
+              onDeclineProposal={handleDeclineIncomingProposal}
+              onSimulateIncomingProposal={handleSimulateNewIncomingProposal}
+              onToggleFavorite={handleToggleFavorite}
+              onOpenTrustInspector={() => setShowTrustInspector(true)}
+            />
+          )
         )}
 
         {/* Tab 2: Full-Screen Synchronized Exchange Session Page */}
@@ -852,7 +1111,7 @@ export default function App() {
             onJoinRoomByCode={(code) => {
               const eligible = peers.find(p => p.onlineStatus === 'online') || peers[0];
               showToast(`Joined session room ${code} with @${eligible.username}`, 'success');
-              handleOpenProposeModal(eligible);
+              handleInviteToExchange(eligible);
             }}
           />
         )}
@@ -863,7 +1122,7 @@ export default function App() {
             currentUser={currentUser}
             peers={peers}
             onProposeExchange={(peer) => {
-              handleOpenProposeModal(peer);
+              handleInviteToExchange(peer);
             }}
             onBackToPool={() => setActiveTab('marketplace')}
           />
@@ -995,6 +1254,12 @@ export default function App() {
           onSimulateScoreChange={(delta, reason, cat) => applyTrustDelta(delta, reason, cat)}
         />
       )}
+
+      {/* 30-second Exchange Request Timeout Modal */}
+      <RequestTimeoutModal
+        partner={timeoutPartner}
+        onClose={() => setTimeoutPartner(null)}
+      />
 
     </div>
   );

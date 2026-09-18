@@ -192,6 +192,16 @@ export interface ExchangeProposal {
   note?: string;
 }
 
+export interface OutgoingInvitation {
+  sessionId: string;
+  partner: User;
+  packageType: PackageType;
+  dwellTime: number;
+  senderLinks: string[];
+  createdAt: number;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+}
+
 export type NotificationType = 'match' | 'verification' | 'trust' | 'quest' | 'security' | 'system';
 
 export interface AppNotification {
