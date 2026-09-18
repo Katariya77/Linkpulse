@@ -103,6 +103,32 @@ export interface User {
   soundAlerts?: boolean;
   autoAcceptMatches?: boolean;
   poolVisibility?: boolean;
+  isPremium?: boolean;
+  premiumPlan?: string;
+  premiumPrice?: number;
+  premiumCurrency?: string;
+  premiumActivatedAt?: string;
+  premiumExpiresAt?: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+}
+
+export interface PremiumSubscription {
+  id: string;
+  userId: string;
+  userEmail: string;
+  username: string;
+  userAvatar?: string;
+  planId: string;
+  planName: string;
+  price: number;
+  currency: string;
+  status: 'active' | 'cancelled' | 'expired';
+  activatedAt: string;
+  expiresAt: string;
+  paymentMethod: string;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
 }
 
 export interface ExchangeLink {

@@ -22,29 +22,103 @@ import {
   ExchangeProposal,
   PublicTabId,
   TabAccessConfig,
-  DEFAULT_TAB_ACCESS
+  DEFAULT_TAB_ACCESS,
+  PremiumSubscription
 } from '../types';
 
 export const ADMIN_EMAIL = 'test@gmail.com';
+export const ADMIN_EMAILS = ['test@gmail.com', 'ccs.krishnakatariya@gmail.com'];
 
 /**
  * Checks if a user has the admin role.
- * Assigned to test@gmail.com or role === 'admin'.
+ * Assigned to test@gmail.com, ccs.krishnakatariya@gmail.com, or role === 'admin'.
  */
 export function isUserAdmin(
   user?: { email?: string | null; role?: string } | null,
   sessionUser?: AuthSessionUser | null
 ): boolean {
-  if (sessionUser && sessionUser.email && sessionUser.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+  const matchesAdmin = (em?: string | null) => 
+    em ? ADMIN_EMAILS.some(a => a.toLowerCase() === em.trim().toLowerCase()) : false;
+
+  if (sessionUser && matchesAdmin(sessionUser.email)) {
     return true;
   }
-  if (user && user.email && user.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+  if (user && matchesAdmin(user.email)) {
     return true;
   }
   if (user && user.role === 'admin') {
     return true;
   }
   return false;
+}
+
+/**
+ * Foolproof helper to check if a user qualifies as a Pro member.
+ * Checks Admin status, user.isPremium flag, and locally persisted authorization.
+ */
+export function checkIsProMember(
+  user?: { id?: string; email?: string | null; role?: string; isPremium?: boolean } | null,
+  sessionUser?: AuthSessionUser | null
+): boolean {
+  if (isUserAdmin(user, sessionUser)) return true;
+  if (user?.isPremium) return true;
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (localStorage.getItem('linkpulse_active_pro') === 'true') return true;
+      if (user?.id && localStorage.getItem(`linkpulse_is_premium_${user.id}`) === 'true') return true;
+      if (sessionUser?.uid && localStorage.getItem(`linkpulse_is_premium_${sessionUser.uid}`) === 'true') return true;
+      if (user?.email && localStorage.getItem(`linkpulse_is_premium_${user.email.trim().toLowerCase()}`) === 'true') return true;
+      if (sessionUser?.email && localStorage.getItem(`linkpulse_is_premium_${sessionUser.email.trim().toLowerCase()}`) === 'true') return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+/**
+ * Stores Pro status in localStorage for instant synchronization and zero-latency access
+ */
+export function setLocalProStatus(
+  userId?: string,
+  email?: string,
+  planName: string = 'Pro Monthly',
+  rzpPaymentId?: string,
+  rzpOrderId?: string
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('linkpulse_active_pro', 'true');
+    localStorage.setItem('linkpulse_current_plan', planName);
+    if (userId) {
+      localStorage.setItem(`linkpulse_is_premium_${userId}`, 'true');
+    }
+    if (email) {
+      localStorage.setItem(`linkpulse_is_premium_${email.trim().toLowerCase()}`, 'true');
+    }
+    if (rzpPaymentId) {
+      localStorage.setItem('linkpulse_last_rzp_payment_id', rzpPaymentId);
+    }
+    if (rzpOrderId) {
+      localStorage.setItem('linkpulse_last_rzp_order_id', rzpOrderId);
+    }
+  } catch (e) {}
+}
+
+/**
+ * Clears local Pro status
+ */
+export function clearLocalProStatus(userId?: string, email?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('linkpulse_active_pro');
+    localStorage.removeItem('linkpulse_current_plan');
+    if (userId) {
+      localStorage.removeItem(`linkpulse_is_premium_${userId}`);
+    }
+    if (email) {
+      localStorage.removeItem(`linkpulse_is_premium_${email.trim().toLowerCase()}`);
+    }
+  } catch (e) {}
 }
 
 export const REAL_INITIAL_GOALS: DailyGoal[] = [
@@ -201,6 +275,11 @@ export function syncUserProfile(
     if (snap.exists()) {
       const data = snap.data();
       const isAdminAccount = (sessionUser.email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() || data.role === 'admin';
+      const isUserPro = checkIsProMember(
+        { id: snap.id, email: sessionUser.email, isPremium: Boolean(data.isPremium), role: data.role },
+        sessionUser
+      );
+
       const user: User = {
         id: snap.id,
         username: data.username || sessionUser.displayName || (isAdminAccount ? 'Admin (test)' : 'PeerUser'),
@@ -220,6 +299,14 @@ export function syncUserProfile(
         authProvider: sessionUser.providerId,
         isFavorite: Boolean(data.isFavorite),
         notes: data.notes || '',
+        isPremium: isUserPro,
+        premiumPlan: data.premiumPlan || (isUserPro ? 'Pro Monthly' : undefined),
+        premiumPrice: typeof data.premiumPrice === 'number' ? data.premiumPrice : (isUserPro ? 10 : undefined),
+        premiumCurrency: data.premiumCurrency || (isUserPro ? 'INR' : undefined),
+        premiumActivatedAt: data.premiumActivatedAt || undefined,
+        premiumExpiresAt: data.premiumExpiresAt || undefined,
+        razorpayPaymentId: data.razorpayPaymentId || undefined,
+        razorpayOrderId: data.razorpayOrderId || undefined,
       };
       onUserUpdate(user);
     }
@@ -288,6 +375,7 @@ export function subscribeToPeers(
           joinedDate: data.joinedDate || 'Recently',
           isFavorite: Boolean(data.isFavorite),
           notes: data.notes || '',
+          isPremium: Boolean(data.isPremium),
         });
       }
     });
@@ -661,4 +749,243 @@ export async function saveTabAccessInFirestore(
     updatedAt: serverTimestamp(),
     updatedBy: updatedByEmail || 'admin',
   }, { merge: true });
+}
+
+export const PREMIUM_SUBSCRIPTIONS_COLLECTION = 'premium_subscriptions';
+
+/**
+ * Activates or grants premium status (₹10/mo single plan) to a user.
+ * Writes to both the users collection and premium_subscriptions collection.
+ */
+export async function activatePremiumSubscription(
+  userId: string,
+  userEmail: string,
+  username: string,
+  userAvatar?: string,
+  paymentMethod: string = 'Razorpay / UPI / Online',
+  razorpayPaymentId?: string,
+  razorpayOrderId?: string
+): Promise<void> {
+  const now = new Date();
+  const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  const nowIso = now.toISOString();
+  const expiresIso = expires.toISOString();
+
+  // 1. Immediately persist Pro authorization to local storage for zero-latency access
+  setLocalProStatus(userId, userEmail, 'Pro Monthly', razorpayPaymentId, razorpayOrderId);
+
+  // Maintain in local subscriptions ledger
+  try {
+    const cachedSubsRaw = localStorage.getItem('linkpulse_premium_subscriptions');
+    let cachedSubs: PremiumSubscription[] = cachedSubsRaw ? JSON.parse(cachedSubsRaw) : [];
+    const existingIndex = cachedSubs.findIndex(s => s.userId === userId);
+    const newSub: PremiumSubscription = {
+      id: userId,
+      userId,
+      userEmail: userEmail || 'member@linkpulse.io',
+      username: username || 'Member',
+      userAvatar,
+      planId: 'pro_monthly_10rs',
+      planName: 'Pro Monthly',
+      price: 10,
+      currency: 'INR',
+      status: 'active',
+      activatedAt: nowIso,
+      expiresAt: expiresIso,
+      paymentMethod,
+      razorpayPaymentId,
+      razorpayOrderId,
+    };
+    if (existingIndex >= 0) {
+      cachedSubs[existingIndex] = newSub;
+    } else {
+      cachedSubs.unshift(newSub);
+    }
+    localStorage.setItem('linkpulse_premium_subscriptions', JSON.stringify(cachedSubs));
+  } catch (e) {}
+
+  // 2. Persist to Firestore asynchronously with isolated error catching
+  if (db && isFirebaseConfigured) {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, {
+        isPremium: true,
+        premiumPlan: 'Pro Monthly',
+        premiumPrice: 10,
+        premiumCurrency: 'INR',
+        premiumActivatedAt: nowIso,
+        premiumExpiresAt: expiresIso,
+        razorpayPaymentId: razorpayPaymentId || null,
+        razorpayOrderId: razorpayOrderId || null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (uErr) {
+      console.warn('Could not update user doc in Firestore:', uErr);
+    }
+
+    try {
+      const subRef = doc(db, PREMIUM_SUBSCRIPTIONS_COLLECTION, userId);
+      await setDoc(subRef, {
+        id: userId,
+        userId,
+        userEmail: userEmail || 'member@linkpulse.io',
+        username: username || 'Member',
+        userAvatar: userAvatar || '',
+        planId: 'pro_monthly_10rs',
+        planName: 'Pro Monthly',
+        price: 10,
+        currency: 'INR',
+        status: 'active',
+        activatedAt: nowIso,
+        expiresAt: expiresIso,
+        paymentMethod,
+        razorpayPaymentId: razorpayPaymentId || null,
+        razorpayOrderId: razorpayOrderId || null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (sErr) {
+      console.warn('Could not update subscription doc in Firestore:', sErr);
+    }
+  }
+}
+
+/**
+ * Revokes or cancels a user's premium subscription.
+ */
+export async function cancelPremiumSubscription(userId: string): Promise<void> {
+  clearLocalProStatus(userId);
+
+  if (db && isFirebaseConfigured) {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, {
+        isPremium: false,
+        premiumPlan: null,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {}
+
+    try {
+      const subRef = doc(db, PREMIUM_SUBSCRIPTIONS_COLLECTION, userId);
+      await setDoc(subRef, {
+        status: 'cancelled',
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {}
+  }
+
+  try {
+    const cachedSubsRaw = localStorage.getItem('linkpulse_premium_subscriptions');
+    if (cachedSubsRaw) {
+      let cachedSubs: PremiumSubscription[] = JSON.parse(cachedSubsRaw);
+      cachedSubs = cachedSubs.map(s => s.userId === userId ? { ...s, status: 'cancelled' } : s);
+      localStorage.setItem('linkpulse_premium_subscriptions', JSON.stringify(cachedSubs));
+    }
+  } catch (e) {}
+}
+
+/**
+ * Real-time listener for all premium subscriptions (for the Admin Panel).
+ */
+export function subscribeToPremiumSubscriptions(
+  onUpdate: (subscriptions: PremiumSubscription[]) => void
+): () => void {
+  // Read local cache immediately
+  try {
+    const cachedSubsRaw = localStorage.getItem('linkpulse_premium_subscriptions');
+    if (cachedSubsRaw) {
+      const parsed = JSON.parse(cachedSubsRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        onUpdate(parsed);
+      }
+    }
+  } catch (e) {}
+
+  if (!db || !isFirebaseConfigured) {
+    return () => {};
+  }
+
+  const subCol = collection(db, PREMIUM_SUBSCRIPTIONS_COLLECTION);
+  const unsubscribe = onSnapshot(subCol, (snap) => {
+    const list: PremiumSubscription[] = [];
+    snap.forEach((docSnap) => {
+      const data = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        userId: data.userId || docSnap.id,
+        userEmail: data.userEmail || 'member@linkpulse.io',
+        username: data.username || 'Member',
+        userAvatar: data.userAvatar || undefined,
+        planId: data.planId || 'pro_monthly_10rs',
+        planName: data.planName || 'Pro Monthly',
+        price: typeof data.price === 'number' ? data.price : 10,
+        currency: data.currency || 'INR',
+        status: data.status || 'active',
+        activatedAt: data.activatedAt || new Date().toISOString(),
+        expiresAt: data.expiresAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        paymentMethod: data.paymentMethod || 'UPI / Online',
+      });
+    });
+
+    // Update local cache
+    try {
+      localStorage.setItem('linkpulse_premium_subscriptions', JSON.stringify(list));
+    } catch (e) {}
+
+    onUpdate(list);
+  }, (err) => {
+    console.warn('Premium subscriptions snapshot warning:', err);
+  });
+
+  return unsubscribe;
+}
+
+/**
+ * Real-time listener for all registered users across the platform (for admin inspection).
+ */
+export function subscribeToAllUsers(
+  onUpdate: (users: User[]) => void
+): () => void {
+  if (!db || !isFirebaseConfigured) {
+    return () => {};
+  }
+
+  const usersCol = collection(db, 'users');
+  const unsubscribe = onSnapshot(usersCol, (snap) => {
+    const list: User[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      const id = d.id;
+      if (!data.isNetworkNode && id !== 'guest_user' && id !== 'usr_me_01') {
+        list.push({
+          id: d.id,
+          username: data.username || 'Member',
+          avatar: data.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          onlineStatus: data.onlineStatus || 'offline',
+          trustScore: typeof data.trustScore === 'number' ? data.trustScore : 100,
+          successRate: typeof data.successRate === 'number' ? data.successRate : 100,
+          lifetimeExchanges: typeof data.lifetimeExchanges === 'number' ? data.lifetimeExchanges : 0,
+          activeStreak: typeof data.activeStreak === 'number' ? data.activeStreak : 0,
+          preferredShorteners: Array.isArray(data.preferredShorteners) ? data.preferredShorteners : ['shrinkme.io', 'ouo.io'],
+          ipAddress: data.ipAddress || '198.51.100.10',
+          country: data.country || 'Global',
+          countryCode: data.countryCode || 'UN',
+          joinedDate: data.joinedDate || 'Recently',
+          email: data.email || undefined,
+          role: data.role || 'member',
+          isPremium: Boolean(data.isPremium),
+          premiumPlan: data.premiumPlan || undefined,
+          premiumPrice: data.premiumPrice || undefined,
+          premiumCurrency: data.premiumCurrency || undefined,
+          premiumActivatedAt: data.premiumActivatedAt || undefined,
+          premiumExpiresAt: data.premiumExpiresAt || undefined,
+        });
+      }
+    });
+    onUpdate(list);
+  }, (err) => {
+    console.warn('All users snapshot warning:', err);
+  });
+
+  return unsubscribe;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   Eye, 
@@ -16,11 +16,19 @@ import {
   KeyRound, 
   Lock, 
   Shield,
-  Sparkles
+  Sparkles,
+  Crown
 } from 'lucide-react';
-import { User, PublicTabId, TabAccessConfig, PUBLIC_TABS_LIST } from '../types';
+import { User, PublicTabId, TabAccessConfig, PUBLIC_TABS_LIST, PremiumSubscription } from '../types';
 import { AuthSessionUser } from '../lib/firebase';
-import { ADMIN_EMAIL } from '../lib/firestoreService';
+import { 
+  ADMIN_EMAIL, 
+  subscribeToPremiumSubscriptions, 
+  subscribeToAllUsers,
+  activatePremiumSubscription,
+  cancelPremiumSubscription
+} from '../lib/firestoreService';
+import { AdminPremiumUsersPage } from './AdminPremiumUsersPage';
 
 interface AdminPanelProps {
   currentUser: User;
@@ -49,9 +57,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   // Mobile sidebar drawer state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [adminActiveTab, setAdminActiveTab] = useState<'tabs' | 'premium'>('tabs');
+  const [premiumSubscriptions, setPremiumSubscriptions] = useState<PremiumSubscription[]>([]);
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>([]);
   const [savingTab, setSavingTab] = useState<PublicTabId | null>(null);
   const [savingHeaderItem, setSavingHeaderItem] = useState<'trust' | 'key' | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Subscribe to premium subscriptions in real time
+  useEffect(() => {
+    const unsub = subscribeToPremiumSubscriptions((subs) => {
+      setPremiumSubscriptions(subs);
+    });
+    return () => unsub();
+  }, []);
+
+  // Subscribe to all registered users for the admin roster & manual granting
+  useEffect(() => {
+    const unsub = subscribeToAllUsers((users) => {
+      setAllRegisteredUsers(users);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleGrantPremium = async (target: { id: string; email: string; username: string; avatar?: string }) => {
+    await activatePremiumSubscription(target.id, target.email, target.username, target.avatar);
+  };
+
+  const handleRevokePremium = async (userId: string) => {
+    await cancelPremiumSubscription(userId);
+  };
 
   const displayEmail = sessionUser?.email || currentUser.email || ADMIN_EMAIL;
   const hiddenTabs = tabAccess.hiddenTabs || [];
@@ -214,18 +249,52 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <p className="text-[11px] text-zinc-400 mt-0.5">Assigned Administrator</p>
             </div>
 
-            {/* Navigation items (only one tab for now: tab access) */}
-            <div className="flex-1 space-y-1">
+            {/* Navigation items */}
+            <div className="flex-1 space-y-1.5">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 py-1">
                 Management
               </div>
+
+              {/* Tab 1: Tab & Header Access */}
               <button
                 type="button"
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium bg-zinc-800 text-white border border-zinc-700 cursor-pointer"
+                onClick={() => {
+                  setAdminActiveTab('tabs');
+                  setIsMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                  adminActiveTab === 'tabs'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                }`}
               >
-                <Sliders className="h-4 w-4 text-zinc-300" />
-                <span>Tab & Header Access</span>
+                <div className="flex items-center space-x-2.5">
+                  <Sliders className="h-4 w-4" />
+                  <span>Tab & Header Access</span>
+                </div>
+                {adminActiveTab === 'tabs' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </button>
+
+              {/* Tab 2: Premium Users */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminActiveTab('premium');
+                  setIsMobileSidebarOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                  adminActiveTab === 'premium'
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Crown className="h-4 w-4 text-amber-400" />
+                  <span>Premium Users</span>
+                </div>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {premiumSubscriptions.filter(s => s.status === 'active').length}
+                </span>
               </button>
             </div>
 
@@ -274,22 +343,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <p className="text-[11px] text-zinc-400 mt-0.5">Assigned to {ADMIN_EMAIL}</p>
         </div>
 
-        {/* Sidebar Nav (Strictly one tab for now: tab access) */}
-        <nav className="flex-1 space-y-1">
+        {/* Sidebar Nav */}
+        <nav className="flex-1 space-y-1.5">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 px-2 pb-2">
             Admin Navigation
           </div>
 
+          {/* Nav Item 1: Tab & Header Access */}
           <button
             type="button"
             id="admin-tab-access-nav-btn"
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium bg-zinc-900 text-white border border-zinc-700 shadow-sm cursor-pointer"
+            onClick={() => setAdminActiveTab('tabs')}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              adminActiveTab === 'tabs'
+                ? 'bg-zinc-800 text-white border border-zinc-700 shadow-sm'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+            }`}
           >
             <div className="flex items-center space-x-2.5">
-              <Sliders className="h-4 w-4 text-zinc-200" strokeWidth={1.5} />
+              <Sliders className="h-4 w-4" strokeWidth={1.5} />
               <span>Tab & Header Access</span>
             </div>
-            <span className="h-2 w-2 rounded-full bg-white" />
+            {adminActiveTab === 'tabs' && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+          </button>
+
+          {/* Nav Item 2: Premium Users */}
+          <button
+            type="button"
+            id="admin-premium-users-nav-btn"
+            onClick={() => setAdminActiveTab('premium')}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              adminActiveTab === 'premium'
+                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900 border border-transparent'
+            }`}
+          >
+            <div className="flex items-center space-x-2.5">
+              <Crown className="h-4 w-4 text-amber-400" strokeWidth={1.5} />
+              <span>Premium Users</span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {premiumSubscriptions.filter(s => s.status === 'active').length}
+            </span>
           </button>
         </nav>
 
@@ -327,8 +422,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800">
+          {adminActiveTab === 'premium' ? (
+            <AdminPremiumUsersPage
+              subscriptions={premiumSubscriptions}
+              allUsers={allRegisteredUsers}
+              onGrantPremium={handleGrantPremium}
+              onRevokePremium={handleRevokePremium}
+            />
+          ) : (
+            <>
+              {/* Page Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-zinc-800">
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
@@ -648,6 +752,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Users signed in with the administrator account (<code className="text-red-300 font-mono">{ADMIN_EMAIL}</code>) can see all elements with a subtle <span className="text-[10px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">Hidden</span> badge for verification.
             </p>
           </div>
+          </>
+          )}
 
         </div>
 

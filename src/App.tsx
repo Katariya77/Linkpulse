@@ -12,6 +12,7 @@ import { DailyQuestsPage } from './components/DailyQuestsPage';
 import { AuthPage } from './components/AuthPage';
 import { AdminPanel } from './components/AdminPanel';
 import { NotificationsPage } from './components/NotificationsPage';
+import { PremiumBuyPage } from './components/PremiumBuyPage';
 import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
@@ -50,7 +51,10 @@ import {
   isUserAdmin,
   subscribeToTabAccess,
   saveTabAccessInFirestore,
-  ADMIN_EMAIL
+  ADMIN_EMAIL,
+  activatePremiumSubscription,
+  checkIsProMember,
+  setLocalProStatus
 } from './lib/firestoreService';
 import { extractDomain, formatTimeRemaining } from './utils/trustUtils';
 import { ShieldCheck, Check, AlertCircle, Sparkles, X, Shield } from 'lucide-react';
@@ -150,8 +154,9 @@ const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
 ];
 
 export default function App() {
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications'>('marketplace');
+  // Navigation tab (Default to 'auth' for new/unauthenticated visitors)
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium'>('auth');
+  const [isFirstTimeSignUp, setIsFirstTimeSignUp] = useState<boolean>(false);
 
   // Firebase authenticated session state
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
@@ -234,8 +239,9 @@ export default function App() {
     }, 4500);
   };
 
-  // Check if current user has admin privileges (assigned to test@gmail.com)
+  // Check if current user has admin privileges (assigned to test@gmail.com or ccs.krishnakatariya@gmail.com)
   const isAdmin = isUserAdmin(currentUser, sessionUser);
+  const isProMember = checkIsProMember(currentUser, sessionUser);
 
   // Subscribe to public tab visibility settings in real time
   useEffect(() => {
@@ -245,9 +251,78 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Redirect public visitors if they land on a hidden tab
+  // Strict Access Control and URL / Address Bar Blocking:
+  // - Unauthenticated visitors: ONLY allowed on 'auth'. Attempting to change address bar URL/hash redirects to '#auth'.
+  // - Free users (logged in, !isProMember): ONLY allowed on 'premium'. Changing address bar URL/hash redirects to '#premium'.
+  // - Pro members and Admins: Can navigate all unlocked tabs, seamlessly synchronized with the URL hash.
   useEffect(() => {
-    if (!isAdmin && activeTab !== 'admin' && activeTab !== 'notifications' && tabAccessConfig.hiddenTabs.includes(activeTab as any)) {
+    if (isAuthLoading) return;
+
+    const enforceAccessControl = () => {
+      // 1. Guest users: strictly locked to 'auth'
+      if (!sessionUser) {
+        if (activeTab !== 'auth') {
+          setActiveTab('auth');
+        }
+        if (window.location.hash !== '#auth') {
+          window.history.replaceState(null, '', '#auth');
+        }
+        return;
+      }
+
+      // 2. Free users: strictly locked to 'premium'
+      if (!isProMember) {
+        if (activeTab !== 'premium') {
+          setActiveTab('premium');
+        }
+        if (window.location.hash !== '#premium') {
+          window.history.replaceState(null, '', '#premium');
+        }
+        return;
+      }
+
+      // 3. Pro members and Admin: Full navigation allowed
+      const currentHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      const validTabs: Array<typeof activeTab> = [
+        'marketplace',
+        'room',
+        'leaderboard',
+        'goals',
+        'auth',
+        'admin',
+        'notifications',
+        'premium'
+      ];
+
+      if (currentHash && validTabs.includes(currentHash as any)) {
+        if (currentHash === 'admin' && !isAdmin) {
+          setActiveTab('marketplace');
+          window.history.replaceState(null, '', '#marketplace');
+        } else if (activeTab !== currentHash) {
+          setActiveTab(currentHash as any);
+        }
+      } else {
+        window.history.replaceState(null, '', `#${activeTab}`);
+      }
+    };
+
+    enforceAccessControl();
+
+    const handleHashOrPopState = () => {
+      enforceAccessControl();
+    };
+
+    window.addEventListener('hashchange', handleHashOrPopState);
+    window.addEventListener('popstate', handleHashOrPopState);
+    return () => {
+      window.removeEventListener('hashchange', handleHashOrPopState);
+      window.removeEventListener('popstate', handleHashOrPopState);
+    };
+  }, [sessionUser, isProMember, isAdmin, isAuthLoading, activeTab]);
+
+  // Redirect public visitors if they land on a hidden tab (for Pro members)
+  useEffect(() => {
+    if (!isAdmin && isProMember && activeTab !== 'admin' && activeTab !== 'notifications' && tabAccessConfig.hiddenTabs.includes(activeTab as any)) {
       const publicFallback = (['marketplace', 'room', 'leaderboard', 'goals', 'auth'] as PublicTabId[]).find(
         (id) => !tabAccessConfig.hiddenTabs.includes(id)
       );
@@ -255,7 +330,7 @@ export default function App() {
         setActiveTab(publicFallback);
       }
     }
-  }, [tabAccessConfig.hiddenTabs, isAdmin, activeTab]);
+  }, [tabAccessConfig.hiddenTabs, isAdmin, isProMember, activeTab]);
 
   // Sign out handler
   const handleSignOut = async () => {
@@ -266,6 +341,7 @@ export default function App() {
     }
     setSessionUser(null);
     setCurrentUser(INITIAL_FALLBACK_USER);
+    setActiveTab('auth');
     showToast('Signed out of LinkPulse', 'info');
   };
 
@@ -1025,6 +1101,7 @@ export default function App() {
       {/* Navigation Bar */}
       <Navbar
         currentUser={currentUser}
+        sessionUser={sessionUser}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         hasActiveSession={!!activeSession}
@@ -1055,8 +1132,99 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         
-        {/* Tab 1: Marketplace / Online Discovery Pool */}
-        {activeTab === 'marketplace' && (
+        {/* PLATFORM ACCESS CONTROL GATE 1: Free guests can ONLY see AuthPage */}
+        {!sessionUser ? (
+          <AuthPage
+            currentUser={currentUser}
+            sessionUser={sessionUser}
+            onAuthSuccess={(user, isSignUp) => {
+              setSessionUser(user);
+              setCurrentUser(prev => ({
+                ...prev,
+                username: user.displayName || prev.username,
+                email: user.email || undefined,
+                avatar: user.photoURL || prev.avatar,
+                authProvider: user.providerId,
+              }));
+              showToast(`Logged in as ${user.displayName || user.email}`, 'success');
+              if (isSignUp) {
+                setIsFirstTimeSignUp(true);
+                setActiveTab('premium');
+              } else {
+                setActiveTab('marketplace');
+              }
+            }}
+            onSignOut={handleSignOut}
+            onNavigateToApp={() => setActiveTab('marketplace')}
+            onNavigateToPremium={() => {
+              setIsFirstTimeSignUp(false);
+              setActiveTab('premium');
+            }}
+            onUpdateUser={handleUpdateUser}
+            onToggleUserStatus={handleToggleUserStatus}
+          />
+        ) : !isProMember ? (
+          /* PLATFORM ACCESS CONTROL GATE 2: Free users CANNOT skip or access app - ONLY Premium Buy Page */
+          <PremiumBuyPage
+            currentUser={currentUser}
+            isFirstTimeSignUp={isFirstTimeSignUp}
+            onPlanPurchased={async ({ planName, price, razorpayPaymentId, razorpayOrderId }) => {
+              const uid = sessionUser?.uid || currentUser.id || 'usr_' + Date.now();
+              const email = sessionUser?.email || currentUser.email || 'user@linkpulse.io';
+              const username = currentUser.username || 'Member';
+
+              // 1. Immediately store Pro status locally & in state synchronously for zero latency
+              setLocalProStatus(uid, email, planName, razorpayPaymentId, razorpayOrderId);
+              setCurrentUser(prev => ({
+                ...prev,
+                isPremium: true,
+                premiumPlan: planName,
+                premiumPrice: price,
+                premiumCurrency: 'INR',
+                razorpayPaymentId,
+                razorpayOrderId,
+              }));
+              setIsFirstTimeSignUp(false);
+              setActiveTab('marketplace');
+              if (typeof window !== 'undefined') {
+                window.location.hash = '#marketplace';
+              }
+
+              // 2. Persist to Firestore asynchronously
+              try {
+                await activatePremiumSubscription(
+                  uid, 
+                  email, 
+                  username, 
+                  currentUser.avatar,
+                  'Razorpay / UPI / Cards',
+                  razorpayPaymentId,
+                  razorpayOrderId
+                );
+                showToast('LinkPulse Pro Monthly activated via Razorpay (₹10/mo)!', 'success');
+              } catch (err) {
+                console.error('Failed to sync premium with Firestore:', err);
+                showToast('Pro activated! Welcome to LinkPulse.', 'success');
+              }
+            }}
+            onContinueToApp={() => {
+              const uid = sessionUser?.uid || currentUser.id;
+              const email = sessionUser?.email || currentUser.email;
+              setLocalProStatus(uid, email, 'Pro Monthly');
+              setCurrentUser(prev => ({ ...prev, isPremium: true }));
+              setIsFirstTimeSignUp(false);
+              setActiveTab('marketplace');
+              if (typeof window !== 'undefined') {
+                window.location.hash = '#marketplace';
+              }
+            }}
+            onSignOut={handleSignOut}
+          />
+        ) : (
+          /* PLATFORM ACCESS CONTROL GATE 3: Pro members and Admin have full access */
+          <>
+            {/* Tab 1: Marketplace / Online Discovery Pool */}
+            {activeTab === 'marketplace' && (
           outgoingInvitation ? (
             <WaitingExchangeScreen
               partner={outgoingInvitation.partner}
@@ -1148,7 +1316,7 @@ export default function App() {
           <AuthPage
             currentUser={currentUser}
             sessionUser={sessionUser}
-            onAuthSuccess={(user) => {
+            onAuthSuccess={(user, isSignUp) => {
               setSessionUser(user);
               setCurrentUser(prev => ({
                 ...prev,
@@ -1158,10 +1326,19 @@ export default function App() {
                 authProvider: user.providerId,
               }));
               showToast(`Logged in as ${user.displayName || user.email}`, 'success');
-              setActiveTab('marketplace');
+              if (isSignUp) {
+                setIsFirstTimeSignUp(true);
+                setActiveTab('premium');
+              } else {
+                setActiveTab('marketplace');
+              }
             }}
             onSignOut={handleSignOut}
             onNavigateToApp={() => setActiveTab('marketplace')}
+            onNavigateToPremium={() => {
+              setIsFirstTimeSignUp(false);
+              setActiveTab('premium');
+            }}
             onUpdateUser={handleUpdateUser}
             onToggleUserStatus={handleToggleUserStatus}
           />
@@ -1233,6 +1410,67 @@ export default function App() {
             onNavigateToTab={(tab) => setActiveTab(tab)}
             onBack={() => setActiveTab('marketplace')}
           />
+        )}
+
+        {/* Tab 8: Premium Buy Page (Single plan ₹10/month) */}
+        {activeTab === 'premium' && (
+          <PremiumBuyPage
+            currentUser={currentUser}
+            isFirstTimeSignUp={isFirstTimeSignUp}
+            onPlanPurchased={async ({ planName, price, razorpayPaymentId, razorpayOrderId }) => {
+              const uid = sessionUser?.uid || currentUser.id || 'usr_' + Date.now();
+              const email = sessionUser?.email || currentUser.email || 'user@linkpulse.io';
+              const username = currentUser.username || 'Member';
+
+              // 1. Immediately store Pro status locally & in state synchronously for zero latency
+              setLocalProStatus(uid, email, planName, razorpayPaymentId, razorpayOrderId);
+              setCurrentUser(prev => ({
+                ...prev,
+                isPremium: true,
+                premiumPlan: planName,
+                premiumPrice: price,
+                premiumCurrency: 'INR',
+                razorpayPaymentId,
+                razorpayOrderId,
+              }));
+              setIsFirstTimeSignUp(false);
+              setActiveTab('marketplace');
+              if (typeof window !== 'undefined') {
+                window.location.hash = '#marketplace';
+              }
+
+              // 2. Persist to Firestore asynchronously
+              try {
+                await activatePremiumSubscription(
+                  uid, 
+                  email, 
+                  username, 
+                  currentUser.avatar,
+                  'Razorpay / UPI / Cards',
+                  razorpayPaymentId,
+                  razorpayOrderId
+                );
+                showToast('LinkPulse Pro Monthly activated via Razorpay (₹10/mo)!', 'success');
+              } catch (err) {
+                console.error('Failed to sync premium with Firestore:', err);
+                showToast('Pro activated! Welcome to LinkPulse.', 'success');
+              }
+            }}
+            onContinueToApp={() => {
+              const uid = sessionUser?.uid || currentUser.id;
+              const email = sessionUser?.email || currentUser.email;
+              setLocalProStatus(uid, email, 'Pro Monthly');
+              setCurrentUser(prev => ({ ...prev, isPremium: true }));
+              setIsFirstTimeSignUp(false);
+              setActiveTab('marketplace');
+              if (typeof window !== 'undefined') {
+                window.location.hash = '#marketplace';
+              }
+            }}
+            onSignOut={handleSignOut}
+          />
+        )}
+          </>
         )}
 
       </main>

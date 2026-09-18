@@ -21,15 +21,19 @@ import {
   LogOut,
   ShieldAlert,
   Bell,
-  User as UserIcon
+  User as UserIcon,
+  Crown
 } from 'lucide-react';
 import { User, TabAccessConfig } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
+import { AuthSessionUser } from '../lib/firebase';
+import { checkIsProMember } from '../lib/firestoreService';
 
 interface NavbarProps {
   currentUser: User;
-  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications';
-  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications') => void;
+  sessionUser?: AuthSessionUser | null;
+  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium';
+  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium') => void;
   hasActiveSession: boolean;
   activeRoomCode?: string;
   isAdmin?: boolean;
@@ -44,6 +48,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
+  sessionUser,
   activeTab,
   setActiveTab,
   hasActiveSession,
@@ -109,6 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [isMobileMenuOpen]);
 
   const hiddenTabs = tabAccessConfig?.hiddenTabs || [];
+  const isProMember = checkIsProMember(currentUser, sessionUser);
 
   const rawNavItems = [
     {
@@ -142,10 +148,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'auth' as const,
-      label: currentUser.email ? 'Account & Profile' : 'Sign In / Register',
-      subtitle: currentUser.email ? `Signed in as ${currentUser.email}` : 'Sign in with Google or Email',
+      label: sessionUser ? 'Account & Profile' : 'Sign In / Register',
+      subtitle: sessionUser ? `Signed in as ${sessionUser.email || currentUser.email}` : 'Sign in with Google or Email',
       icon: KeyRound,
-      badge: currentUser.email ? 'Verified' : 'Firebase',
+      badge: sessionUser ? 'Verified' : undefined,
     },
     {
       id: 'notifications' as const,
@@ -158,13 +164,34 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
   ];
 
-  // Filter public items based on admin settings:
-  // If not admin, hide tabs that are marked as hidden.
-  // If admin, show all tabs, and note hidden state.
-  const navItems = rawNavItems.filter((item) => {
-    if (isAdmin) return true;
-    return !hiddenTabs.includes(item.id as any);
-  });
+  // Filter navigation destinations:
+  // If guest: only auth.
+  // If free user: only premium.
+  // If pro/admin: all unlocked tabs.
+  const navItems = !sessionUser
+    ? [
+        {
+          id: 'auth' as const,
+          label: 'Sign In / Register',
+          subtitle: 'Access the LinkPulse creator network',
+          icon: KeyRound,
+          badge: undefined,
+        },
+      ]
+    : !isProMember
+    ? [
+        {
+          id: 'premium' as const,
+          label: 'Pro Membership (₹10/mo)',
+          subtitle: 'Required plan to access exchange rooms & pool',
+          icon: Crown,
+          badge: 'Required',
+        },
+      ]
+    : rawNavItems.filter((item) => {
+        if (isAdmin) return true;
+        return !hiddenTabs.includes(item.id as any);
+      });
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-[#09090b]/95 backdrop-blur-sm">
@@ -175,7 +202,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button 
             id="brand-logo-btn"
             onClick={() => {
-              setActiveTab('marketplace');
+              if (!sessionUser) {
+                setActiveTab('auth');
+              } else if (!isProMember) {
+                setActiveTab('premium');
+              } else {
+                setActiveTab('marketplace');
+              }
               setIsMobileMenuOpen(false);
             }}
             className="cursor-pointer text-left focus:outline-none py-1"
@@ -185,7 +218,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </button>
 
-          {/* Navigation Links (Desktop Only - lg+) */}
+          {/* If free user, show Pro requirement banner */}
+          {sessionUser && !isProMember && (
+            <div className="hidden lg:flex items-center space-x-2 pl-4 border-l border-zinc-800">
+              <button
+                id="nav-get-pro-btn"
+                onClick={() => setActiveTab('premium')}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition-all cursor-pointer"
+              >
+                <Crown className="h-3.5 w-3.5 text-amber-400" />
+                <span>Pro Membership Required (₹10/mo)</span>
+              </button>
+            </div>
+          )}
+
+          {/* Navigation Links (Desktop Only - lg+) - Only shown to Pro members and Admin */}
+          {sessionUser && isProMember && (
           <nav className="hidden lg:flex items-center space-x-1 pl-4 border-l border-zinc-800">
             {(isAdmin || !hiddenTabs.includes('marketplace')) && (
               <button
@@ -320,77 +368,114 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
           </nav>
+          )}
         </div>
 
         {/* Right User Telemetry & Menu Button */}
         <div className="flex items-center space-x-2 sm:space-x-2.5">
           
-          {/* Quick Auth Trigger Button (Key Icon beside Profile) */}
-          {(isAdmin || !tabAccessConfig?.hideHeaderAuthKey) && (
+          {/* 1. GUEST USER: Only show Sign In button */}
+          {!sessionUser && (
             <button
-              id="header-auth-trigger-btn"
+              id="header-guest-signin-btn"
               onClick={() => setActiveTab('auth')}
-              title={currentUser.email ? `Signed in as ${currentUser.email}` : "Sign In with Google or Email"}
-              className={`flex items-center space-x-1.5 rounded-md px-2 sm:px-2.5 py-1 text-xs font-medium transition-colors border cursor-pointer ${
-                activeTab === 'auth'
-                  ? 'bg-zinc-800 text-white border-zinc-600'
-                  : currentUser.email
-                  ? 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:text-white'
-                  : 'bg-white text-zinc-950 border-white hover:bg-zinc-200 font-semibold'
-              }`}
+              className="flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-xs font-semibold bg-white text-zinc-950 hover:bg-zinc-200 transition-colors cursor-pointer shadow-sm"
             >
-              {currentUser.email ? (
-                <>
+              <LogIn className="h-3.5 w-3.5" />
+              <span>Sign In / Register</span>
+            </button>
+          )}
+
+          {/* 2. FREE USER (Logged in, but not Pro): Show account pill and Sign Out */}
+          {sessionUser && !isProMember && (
+            <div className="flex items-center space-x-2">
+              <button
+                id="header-free-user-account-btn"
+                onClick={() => setActiveTab('premium')}
+                className="flex items-center space-x-1.5 rounded-md px-2.5 py-1 text-xs text-zinc-300 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer"
+              >
+                <KeyRound className="h-3.5 w-3.5 text-amber-400" />
+                <span className="max-w-[130px] truncate text-[11px] font-medium">{sessionUser.email || currentUser.email}</span>
+                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/30">FREE</span>
+              </button>
+              {onSignOut && (
+                <button
+                  id="header-free-user-signout-btn"
+                  onClick={onSignOut}
+                  title="Sign Out"
+                  className="flex items-center space-x-1 rounded-md px-2.5 py-1 text-xs text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 hover:border-zinc-700 transition-colors cursor-pointer"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline text-[11px]">Sign Out</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 3. PRO USER / ADMIN: Full interactive telemetry and profile menu */}
+          {sessionUser && isProMember && (
+            <>
+              {/* Pro Badge */}
+              <div className="hidden sm:inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                <Crown className="h-3 w-3 text-amber-400" />
+                <span>PRO</span>
+              </div>
+
+              {/* Quick Auth Trigger Button (Key Icon beside Profile) */}
+              {(isAdmin || !tabAccessConfig?.hideHeaderAuthKey) && (
+                <button
+                  id="header-auth-trigger-btn"
+                  onClick={() => setActiveTab('auth')}
+                  title={`Signed in as ${sessionUser.email || currentUser.email}`}
+                  className={`flex items-center space-x-1.5 rounded-md px-2 sm:px-2.5 py-1 text-xs font-medium transition-colors border cursor-pointer ${
+                    activeTab === 'auth'
+                      ? 'bg-zinc-800 text-white border-zinc-600'
+                      : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-700 hover:text-white'
+                  }`}
+                >
                   <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
                   <span className="hidden sm:inline text-zinc-300 text-[11px]">Account</span>
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                </>
-              ) : (
-                <>
-                  <LogIn className="h-3.5 w-3.5" strokeWidth={2} />
-                  <span>Sign In</span>
-                </>
+                  {isAdmin && tabAccessConfig?.hideHeaderAuthKey && (
+                    <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
+                      Hidden
+                    </span>
+                  )}
+                </button>
               )}
-              {isAdmin && tabAccessConfig?.hideHeaderAuthKey && (
-                <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
-                  Hidden
-                </span>
-              )}
-            </button>
-          )}
 
-          {/* Trust Score Pill beside Profile */}
-          {(isAdmin || !tabAccessConfig?.hideHeaderTrust) && (
-            <button
-              id="trust-score-badge-btn"
-              onClick={onOpenTrustInspector}
-              title="Inspect Trust Score"
-              className="flex items-center space-x-1.5 sm:space-x-2 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 sm:px-2.5 py-1 transition-colors text-xs shrink-0 cursor-pointer"
-            >
-              <Shield className="h-3.5 w-3.5 text-zinc-300 shrink-0" strokeWidth={1.5} />
-              <div className="flex items-center space-x-1">
-                <span className="hidden min-[420px]:inline text-zinc-500 text-[10px]">TRUST</span>
-                <span className="font-semibold text-white tabular-nums">{currentUser.trustScore}</span>
+              {/* Trust Score Pill beside Profile */}
+              {(isAdmin || !tabAccessConfig?.hideHeaderTrust) && (
+                <button
+                  id="trust-score-badge-btn"
+                  onClick={onOpenTrustInspector}
+                  title="Inspect Trust Score"
+                  className="flex items-center space-x-1.5 sm:space-x-2 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-2 sm:px-2.5 py-1 transition-colors text-xs shrink-0 cursor-pointer"
+                >
+                  <Shield className="h-3.5 w-3.5 text-zinc-300 shrink-0" strokeWidth={1.5} />
+                  <div className="flex items-center space-x-1">
+                    <span className="hidden min-[420px]:inline text-zinc-500 text-[10px]">TRUST</span>
+                    <span className="font-semibold text-white tabular-nums">{currentUser.trustScore}</span>
+                  </div>
+                  <span className={`hidden sm:inline-block text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
+                    {trustInfo.tier.toUpperCase()}
+                  </span>
+                  {isAdmin && tabAccessConfig?.hideHeaderTrust && (
+                    <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
+                      Hidden
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Active Streak */}
+              <div 
+                title={`${currentUser.activeStreak} consecutive days completed`}
+                className="hidden lg:flex items-center space-x-1.5 rounded-md bg-zinc-900 border border-zinc-800 px-2.5 py-1 text-xs"
+              >
+                <Flame className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
+                <span className="font-medium text-zinc-200 tabular-nums">{currentUser.activeStreak}d</span>
               </div>
-              <span className={`hidden sm:inline-block text-[9px] sm:text-[10px] px-1.5 py-0.2 rounded font-medium border ${trustInfo.badgeClass}`}>
-                {trustInfo.tier.toUpperCase()}
-              </span>
-              {isAdmin && tabAccessConfig?.hideHeaderTrust && (
-                <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
-                  Hidden
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Active Streak */}
-          <div 
-            title={`${currentUser.activeStreak} consecutive days completed`}
-            className="hidden lg:flex items-center space-x-1.5 rounded-md bg-zinc-900 border border-zinc-800 px-2.5 py-1 text-xs"
-          >
-            <Flame className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-            <span className="font-medium text-zinc-200 tabular-nums">{currentUser.activeStreak}d</span>
-          </div>
 
           {/* Header Notification Icon Button */}
           <button
@@ -461,71 +546,114 @@ export const Navbar: React.FC<NavbarProps> = ({
                   className="absolute right-0 mt-2 w-56 rounded-xl bg-[#0e0e11] border border-zinc-800 shadow-2xl p-1.5 z-50 text-white"
                 >
                   <div className="space-y-1">
-                    {/* 1. Go Online Toggle (if already online, then go offline) */}
-                    <button
-                      type="button"
-                      id="profile-dropdown-toggle-status-btn"
-                      onClick={() => {
-                        onToggleUserStatus();
-                      }}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium transition-all cursor-pointer border text-left ${
-                        currentUser.onlineStatus === 'online'
-                          ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60'
-                          : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <span className="relative flex h-2 w-2 shrink-0">
-                          {currentUser.onlineStatus === 'online' && (
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                          )}
-                          <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                            currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
-                          }`} />
-                        </span>
-                        <div>
-                          <span className="font-semibold block text-xs text-white">
-                            {currentUser.onlineStatus === 'online' ? 'Go Offline' : 'Go Online'}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 block">
-                            {currentUser.onlineStatus === 'online' ? 'Status: Online' : 'Status: Offline'}
-                          </span>
-                        </div>
-                      </div>
+                    {sessionUser ? (
+                      <>
+                        {/* 1. Go Online Toggle (if already online, then go offline) */}
+                        <button
+                          type="button"
+                          id="profile-dropdown-toggle-status-btn"
+                          onClick={() => {
+                            onToggleUserStatus();
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium transition-all cursor-pointer border text-left ${
+                            currentUser.onlineStatus === 'online'
+                              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/60'
+                              : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="relative flex h-2 w-2 shrink-0">
+                              {currentUser.onlineStatus === 'online' && (
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                              )}
+                              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                                currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-500'
+                              }`} />
+                            </span>
+                            <div>
+                              <span className="font-semibold block text-xs text-white">
+                                {currentUser.onlineStatus === 'online' ? 'Go Offline' : 'Go Online'}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 block">
+                                {currentUser.onlineStatus === 'online' ? 'Status: Online' : 'Status: Offline'}
+                              </span>
+                            </div>
+                          </div>
 
-                      {/* Visual switch toggle */}
-                      <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors shrink-0 ${
-                        currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-700'
-                      }`}>
-                        <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
-                          currentUser.onlineStatus === 'online' ? 'translate-x-3.5' : 'translate-x-0'
-                        }`} />
-                      </div>
-                    </button>
+                          {/* Visual switch toggle */}
+                          <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors shrink-0 ${
+                            currentUser.onlineStatus === 'online' ? 'bg-emerald-500' : 'bg-zinc-700'
+                          }`}>
+                            <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                              currentUser.onlineStatus === 'online' ? 'translate-x-3.5' : 'translate-x-0'
+                            }`} />
+                          </div>
+                        </button>
 
-                    {/* 2. Profile (clicking on it will redirect to profile page) */}
-                    <button
-                      type="button"
-                      id="profile-dropdown-view-profile-btn"
-                      onClick={() => {
-                        setActiveTab('auth');
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
-                          <UserIcon className="h-3.5 w-3.5" />
+                        {/* 2. Profile (clicking on it will redirect to profile page) */}
+                        <button
+                          type="button"
+                          id="profile-dropdown-view-profile-btn"
+                          onClick={() => {
+                            setActiveTab('auth');
+                            setIsProfileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
+                              <UserIcon className="h-3.5 w-3.5" />
+                            </div>
+                            <span className="font-semibold text-xs text-white">Profile & Settings</span>
+                          </div>
+                          <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                        </button>
+
+                        {/* 3. Sign Out button */}
+                        {onSignOut && (
+                          <button
+                            type="button"
+                            id="profile-dropdown-signout-btn"
+                            onClick={() => {
+                              setIsProfileMenuOpen(false);
+                              onSignOut();
+                            }}
+                            className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-red-300 hover:text-red-200 bg-red-950/20 hover:bg-red-950/50 border border-red-900/40 transition-colors cursor-pointer group"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="h-6 w-6 rounded-md bg-red-950 flex items-center justify-center text-red-400 transition-colors">
+                                <LogOut className="h-3.5 w-3.5" />
+                              </div>
+                              <span className="font-semibold text-xs text-red-300">Sign Out</span>
+                            </div>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      /* If not logged in, prompt sign in */
+                      <button
+                        type="button"
+                        id="profile-dropdown-signin-btn"
+                        onClick={() => {
+                          setActiveTab('auth');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-medium text-white bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <LogIn className="h-4 w-4 text-emerald-400" />
+                          <span className="font-semibold">Sign In / Register</span>
                         </div>
-                        <span className="font-semibold text-xs text-white">Profile</span>
-                      </div>
-                      <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                    </button>
+                        <ArrowRight className="h-3.5 w-3.5 text-zinc-400" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
+          </>
+          )}
 
           {/* Mobile & Tablet Sidebar Toggle Button */}
           <button

@@ -27,7 +27,8 @@ import {
   ArrowLeft,
   ChevronRight,
   Globe,
-  CheckCheck
+  CheckCheck,
+  Crown
 } from 'lucide-react';
 import { 
   loginWithGoogle, 
@@ -42,9 +43,10 @@ import { getTrustTier } from '../utils/trustUtils';
 interface AuthPageProps {
   currentUser: User;
   sessionUser: AuthSessionUser | null;
-  onAuthSuccess: (user: AuthSessionUser) => void;
+  onAuthSuccess: (user: AuthSessionUser, isSignUp?: boolean) => void;
   onSignOut: () => void;
   onNavigateToApp: () => void;
+  onNavigateToPremium?: () => void;
   onUpdateUser?: (updates: Partial<User>) => void;
   onToggleUserStatus?: () => void;
 }
@@ -75,6 +77,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onAuthSuccess,
   onSignOut,
   onNavigateToApp,
+  onNavigateToPremium,
   onUpdateUser,
   onToggleUserStatus,
 }) => {
@@ -253,7 +256,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         user = await registerWithEmail(cleanEmail, cleanPassword, usernameInput.trim() || undefined);
         setSuccessNotice(`Account created successfully! Welcome, ${user.displayName || user.email}!`);
       }
-      onAuthSuccess(user);
+      onAuthSuccess(user, authMode === 'signup');
       setShowAuthCard(false);
     } catch (err: any) {
       setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
@@ -275,6 +278,254 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       setSuccessNotice('Signed out successfully.');
     }
   };
+
+  // When user is not authenticated (or after logging out): Show ONLY Auth!
+  if (!sessionUser) {
+    return (
+      <div className="w-full min-h-[calc(100vh-3.5rem)] bg-[#09090b] text-white flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 animate-fadeIn">
+        <div className="w-full max-w-md mx-auto space-y-6">
+          {/* Top back navigation */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              id="auth-back-to-pool-btn"
+              onClick={onNavigateToApp}
+              className="inline-flex items-center space-x-1.5 text-xs font-medium text-zinc-400 hover:text-white transition-colors cursor-pointer px-2.5 py-1.5 rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Back to Discovery Pool</span>
+            </button>
+            <div className="inline-flex items-center space-x-1.5 text-xs text-zinc-400">
+              <Shield className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Secure Authentication</span>
+            </div>
+          </div>
+
+          {/* Feedback alerts */}
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/80 text-red-200 text-xs flex items-start space-x-2.5 animate-fadeIn">
+              <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">{errorMessage}</div>
+            </div>
+          )}
+
+          {successNotice && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-800/80 text-emerald-200 text-xs flex items-start space-x-2.5 animate-fadeIn">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="flex-1 leading-relaxed">{successNotice}</div>
+            </div>
+          )}
+
+          {/* Dedicated Auth Card */}
+          <div className="rounded-2xl border border-zinc-800 bg-[#101014] p-6 sm:p-8 space-y-6 shadow-2xl">
+            {/* Header Branding */}
+            <div className="text-center space-y-2">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-700/80 text-white shadow-inner mb-1">
+                <Shield className="h-6 w-6 text-white" strokeWidth={1.75} />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                {authMode === 'signin' ? 'Sign in to LinkPulse' : 'Create your Account'}
+              </h1>
+              <p className="text-xs text-zinc-400 max-w-xs mx-auto">
+                {authMode === 'signin'
+                  ? 'Access real-time link exchanges, peer telemetry, and your verified reputation ledger'
+                  : 'Join the LinkPulse network to safely exchange shortener views and build trust'}
+              </p>
+            </div>
+
+            {/* Google Sign In Button */}
+            <button
+              id="google-signin-btn"
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleLoading || isLoading}
+              className="w-full py-3 px-4 rounded-xl font-medium text-sm bg-zinc-950 hover:bg-zinc-900 text-white border border-zinc-700/80 hover:border-zinc-600 transition-all flex items-center justify-center space-x-3 cursor-pointer shadow-sm active:scale-[0.99] disabled:opacity-60"
+            >
+              {isGoogleLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+              ) : (
+                <>
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>Continue with Google</span>
+                </>
+              )}
+            </button>
+
+            {/* Divider */}
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-zinc-800 w-full" />
+              <span className="bg-[#101014] px-3 text-[11px] uppercase tracking-wider text-zinc-500 font-mono">
+                or email credentials
+              </span>
+              <div className="border-t border-zinc-800 w-full" />
+            </div>
+
+            {/* Mode Switcher Tabs */}
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-950 border border-zinc-800">
+              <button
+                type="button"
+                id="auth-mode-signin-tab"
+                onClick={() => {
+                  setAuthMode('signin');
+                  setErrorMessage(null);
+                }}
+                className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                  authMode === 'signin'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                id="auth-mode-signup-tab"
+                onClick={() => {
+                  setAuthMode('signup');
+                  setErrorMessage(null);
+                }}
+                className={`py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+                  authMode === 'signup'
+                    ? 'bg-zinc-800 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              {authMode === 'signup' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-300 block">
+                    Username
+                  </label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                    <input
+                      id="auth-username-input"
+                      type="text"
+                      placeholder="e.g. alex99"
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-zinc-600 focus:outline-none text-xs sm:text-sm text-white placeholder-zinc-600 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-300 block">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                  <input
+                    id="auth-email-input"
+                    type="email"
+                    required
+                    placeholder="user@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-zinc-600 focus:outline-none text-xs sm:text-sm text-white placeholder-zinc-600 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-zinc-300 block">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-zinc-500" />
+                  <input
+                    id="auth-password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-zinc-600 focus:outline-none text-xs sm:text-sm text-white placeholder-zinc-600 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3 text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="auth-submit-btn"
+                type="submit"
+                disabled={isLoading || isGoogleLoading}
+                className="w-full mt-2 py-3 px-4 rounded-xl font-medium text-sm bg-white text-zinc-950 hover:bg-zinc-200 transition-colors flex items-center justify-center space-x-2 cursor-pointer shadow-md active:scale-[0.99] disabled:opacity-60"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-zinc-950" />
+                ) : (
+                  <>
+                    <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick credentials shortcut */}
+            <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-500 flex-wrap gap-1">
+              <span>Quick credentials:</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  id="auth-fill-admin-btn"
+                  onClick={() => {
+                    setEmail('test@gmail.com');
+                    setPassword('admin12345');
+                  }}
+                  className="text-red-400 hover:text-red-300 underline cursor-pointer font-medium"
+                >
+                  Admin (test@gmail.com)
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  id="auth-fill-member-btn"
+                  onClick={() => {
+                    setEmail('demo@linkpulse.io');
+                    setPassword('pulse12345');
+                  }}
+                  className="text-zinc-400 hover:text-white underline cursor-pointer"
+                >
+                  Member
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-[calc(100vh-3.5rem)] bg-[#09090b] text-white flex flex-col items-center justify-start p-4 sm:p-6 lg:p-8">
@@ -351,8 +602,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </p>
             </div>
 
-            {/* Quick status pill */}
-            <div className="flex items-center space-x-1.5">
+            {/* Quick status pill and Pro Badge / Upgrade */}
+            <div className="flex items-center space-x-2">
+              {currentUser.isPremium ? (
+                <div className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  <Crown className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Pro Member</span>
+                </div>
+              ) : (
+                onNavigateToPremium && (
+                  <button
+                    type="button"
+                    id="profile-upgrade-pro-btn"
+                    onClick={onNavigateToPremium}
+                    className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 transition-colors shadow-sm cursor-pointer"
+                  >
+                    <Crown className="h-3.5 w-3.5" />
+                    <span>Get Pro (₹10/mo)</span>
+                  </button>
+                )
+              )}
               <span className={`px-2.5 py-1 rounded-md text-[11px] font-medium border ${trustTier.badgeClass}`}>
                 {trustTier.label}
               </span>
@@ -881,7 +1150,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   {authMode === 'signin' ? 'Sign In to an Account' : 'Create a Permanent Account'}
                 </h3>
                 <p className="text-xs text-zinc-400">
-                  Connect via Firebase Auth to persist records and access admin privileges
+                  Sign in to access your account, verified records, and member privileges
                 </p>
               </div>
               <button

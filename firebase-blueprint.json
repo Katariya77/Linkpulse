@@ -72,12 +72,37 @@
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       }
+    },
+    "PremiumSubscription": {
+      "title": "PremiumSubscription",
+      "description": "Active premium subscription records for pro users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "username": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "planId": { "type": "string" },
+        "planName": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "cancelled", "expired"] },
+        "activatedAt": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "paymentMethod": { "type": "string" }
+      },
+      "required": ["id", "userId", "userEmail", "planId", "price", "status"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User profile documents keyed by Firebase Auth UID."
+    },
+    "/premium_subscriptions/{subscriptionId}": {
+      "schema": { "$ref": "#/entities/PremiumSubscription" },
+      "description": "Premium tier subscribers tracking 10rs/mo plans."
     },
     "/sessions/{sessionId}": {
       "schema": { "$ref": "#/entities/ExchangeSession" },
