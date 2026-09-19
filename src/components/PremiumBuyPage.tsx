@@ -120,13 +120,12 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
 
       if (hasSdk && isRealRazorpayKey) {
         // Launch standard Razorpay Checkout Modal
-        const options = {
+        const options: any = {
           key: orderData.keyId,
           amount: orderData.order.amount,
           currency: 'INR',
           name: 'LinkPulse',
           description: 'LinkPulse Pro Monthly (₹10/mo)',
-          order_id: orderData.order.id,
           prefill: {
             name: currentUser.username || 'LinkPulse Member',
             email: currentUser.email || '',
@@ -178,6 +177,16 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
             }
           },
         };
+
+        // Attach server order_id only if created by live Razorpay API (avoids invalid order_id errors)
+        if (
+          orderData.order?.id &&
+          orderData.order.id.startsWith('order_') &&
+          !orderData.order.id.startsWith('order_demo_') &&
+          !orderData.order.id.startsWith('order_client_')
+        ) {
+          options.order_id = orderData.order.id;
+        }
 
         const rzp = new (window as any).Razorpay(options);
         rzp.on('payment.failed', (resp: any) => {

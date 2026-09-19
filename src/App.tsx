@@ -280,37 +280,69 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Strict Access Control and URL / Address Bar Blocking:
-  // - Unauthenticated visitors: ONLY allowed on 'auth'. Attempting to change address bar URL/hash redirects to '#auth'.
+  // Strict Access Control and URL / Address Bar Synchronization:
+  // - Unauthenticated visitors: ONLY allowed on 'auth'. Changing address bar URL/hash redirects to '#auth'.
   // - Free users (logged in, !isProMember): ONLY allowed on 'premium'. Changing address bar URL/hash redirects to '#premium'.
-  // - Pro members and Admins: Can navigate all unlocked tabs, seamlessly synchronized with the URL hash.
+  // - Pro members and Admins: Full unhindered navigation across all tabs with live URL hash sync.
   useEffect(() => {
     if (isAuthLoading) return;
 
-    const enforceAccessControl = () => {
-      // 1. Guest users: strictly locked to 'auth'
+    // 1. Guest users: strictly locked to 'auth'
+    if (!sessionUser) {
+      if (activeTab !== 'auth') {
+        setActiveTab('auth');
+      }
+      if (window.location.hash !== '#auth') {
+        window.history.replaceState(null, '', '#auth');
+      }
+      return;
+    }
+
+    // 2. Free users: strictly locked to 'premium'
+    if (!isProMember) {
+      if (activeTab !== 'premium') {
+        setActiveTab('premium');
+      }
+      if (window.location.hash !== '#premium') {
+        window.history.replaceState(null, '', '#premium');
+      }
+      return;
+    }
+
+    // 3. Pro members and Admin: Full navigation allowed
+    if (activeTab === 'admin' && !isAdmin) {
+      setActiveTab('marketplace');
+      window.history.replaceState(null, '', '#marketplace');
+      return;
+    }
+
+    // Keep the browser address bar hash synchronized with activeTab
+    if (window.location.hash !== `#${activeTab}`) {
+      window.history.replaceState(null, '', `#${activeTab}`);
+    }
+  }, [sessionUser, isProMember, isAdmin, isAuthLoading, activeTab]);
+
+  // Handle browser Back/Forward navigation and manual address bar URL hash changes
+  useEffect(() => {
+    const handleHashOrPopState = () => {
+      if (isAuthLoading) return;
+
       if (!sessionUser) {
-        if (activeTab !== 'auth') {
-          setActiveTab('auth');
-        }
         if (window.location.hash !== '#auth') {
           window.history.replaceState(null, '', '#auth');
         }
+        setActiveTab('auth');
         return;
       }
 
-      // 2. Free users: strictly locked to 'premium'
       if (!isProMember) {
-        if (activeTab !== 'premium') {
-          setActiveTab('premium');
-        }
         if (window.location.hash !== '#premium') {
           window.history.replaceState(null, '', '#premium');
         }
+        setActiveTab('premium');
         return;
       }
 
-      // 3. Pro members and Admin: Full navigation allowed
       const currentHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
       const validTabs: Array<typeof activeTab> = [
         'marketplace',
@@ -328,18 +360,10 @@ export default function App() {
         if (currentHash === 'admin' && !isAdmin) {
           setActiveTab('marketplace');
           window.history.replaceState(null, '', '#marketplace');
-        } else if (activeTab !== currentHash) {
+        } else {
           setActiveTab(currentHash as any);
         }
-      } else {
-        window.history.replaceState(null, '', `#${activeTab}`);
       }
-    };
-
-    enforceAccessControl();
-
-    const handleHashOrPopState = () => {
-      enforceAccessControl();
     };
 
     window.addEventListener('hashchange', handleHashOrPopState);
@@ -348,19 +372,7 @@ export default function App() {
       window.removeEventListener('hashchange', handleHashOrPopState);
       window.removeEventListener('popstate', handleHashOrPopState);
     };
-  }, [sessionUser, isProMember, isAdmin, isAuthLoading, activeTab]);
-
-  // Redirect public visitors if they land on a hidden tab (for Pro members)
-  useEffect(() => {
-    if (!isAdmin && isProMember && activeTab !== 'admin' && activeTab !== 'notifications' && tabAccessConfig.hiddenTabs.includes(activeTab as any)) {
-      const publicFallback = (['marketplace', 'room', 'leaderboard', 'goals', 'auth'] as PublicTabId[]).find(
-        (id) => !tabAccessConfig.hiddenTabs.includes(id)
-      );
-      if (publicFallback && publicFallback !== activeTab) {
-        setActiveTab(publicFallback);
-      }
-    }
-  }, [tabAccessConfig.hiddenTabs, isAdmin, isProMember, activeTab]);
+  }, [sessionUser, isProMember, isAdmin, isAuthLoading]);
 
   // Sign out handler
   const handleSignOut = async () => {

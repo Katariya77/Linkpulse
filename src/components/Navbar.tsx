@@ -196,10 +196,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           badge: 'Required',
         },
       ]
-    : rawNavItems.filter((item) => {
-        if (isAdmin) return true;
-        return !hiddenTabs.includes(item.id as any);
-      });
+    : rawNavItems;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-[#09090b]/95 backdrop-blur-sm">
@@ -243,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Navigation Links (Desktop Only - lg+) - Only shown to Pro members and Admin */}
           {sessionUser && isProMember && (
           <nav className="hidden lg:flex items-center space-x-1 pl-4 border-l border-zinc-800">
-            {(isAdmin || !hiddenTabs.includes('marketplace')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('marketplace')) && (
               <button
                 id="nav-marketplace-btn"
                 onClick={() => setActiveTab('marketplace')}
@@ -263,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || !hiddenTabs.includes('room')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('room')) && (
               <button
                 id="nav-room-btn"
                 onClick={() => setActiveTab('room')}
@@ -294,7 +291,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || !hiddenTabs.includes('leaderboard')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('leaderboard')) && (
               <button
                 id="nav-leaderboard-btn"
                 onClick={() => setActiveTab('leaderboard')}
@@ -314,7 +311,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || !hiddenTabs.includes('goals')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('goals')) && (
               <button
                 id="nav-daily-goals-btn"
                 onClick={() => setActiveTab('goals')}
@@ -337,7 +334,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || !hiddenTabs.includes('referral')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('referral')) && (
               <button
                 id="nav-referral-btn"
                 onClick={() => setActiveTab('referral')}
@@ -360,7 +357,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || !hiddenTabs.includes('auth')) && (
+            {(isAdmin || isProMember || !hiddenTabs.includes('auth')) && (
               <button
                 id="nav-auth-btn"
                 onClick={() => setActiveTab('auth')}

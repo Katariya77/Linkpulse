@@ -10,7 +10,7 @@ dotenv.config();
 let razorpayClient: Razorpay | null = null;
 
 function getRazorpay(): Razorpay | null {
-  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID)?.trim();
   const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
   if (!keyId || !keySecret) {
     return null;
@@ -37,7 +37,7 @@ async function startServer() {
 
   // Razorpay public status / config endpoint
   app.get('/api/razorpay/config', (req, res) => {
-    const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+    const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID)?.trim();
     const hasSecret = Boolean(process.env.RAZORPAY_KEY_SECRET?.trim());
     const isConfigured = Boolean(keyId && hasSecret);
 
@@ -56,7 +56,7 @@ async function startServer() {
       const amountInPaise = Math.round(Number(amount) * 100);
 
       const rzp = getRazorpay();
-      const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+      const keyId = (process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID)?.trim();
 
       if (rzp && keyId) {
         // Live Razorpay order creation
