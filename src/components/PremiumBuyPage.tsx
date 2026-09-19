@@ -25,6 +25,8 @@ import {
   RazorpayConfig
 } from '../utils/razorpayClient';
 import { checkIsProMember } from '../lib/firestoreService';
+import { LegalFooter } from './LegalFooter';
+import { LegalPolicyTab } from './LegalModal';
 
 interface PremiumBuyPageProps {
   currentUser: User;
@@ -38,6 +40,7 @@ interface PremiumBuyPageProps {
   onContinueToApp: () => void;
   onSignOut?: () => void;
   isFirstTimeSignUp?: boolean;
+  onOpenLegalPolicy?: (tab: LegalPolicyTab) => void;
 }
 
 export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
@@ -46,6 +49,7 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
   onContinueToApp,
   onSignOut,
   isFirstTimeSignUp = false,
+  onOpenLegalPolicy,
 }) => {
   const [step, setStep] = useState<'plan' | 'checkout' | 'processing' | 'success'>('plan');
   const [selectedMethod, setSelectedMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
@@ -314,7 +318,7 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
                 )}
                 <div className="flex items-center justify-between text-zinc-400">
                   <span>Payment Gateway:</span>
-                  <span className="text-emerald-400 font-medium">Razorpay Verified</span>
+                  <span className="text-zinc-300 font-medium">Razorpay Gateway</span>
                 </div>
               </div>
 
@@ -497,7 +501,7 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
             <div className="text-center">
               <p className="text-[11px] text-zinc-500 flex items-center justify-center space-x-1">
                 <Lock className="h-3 w-3" />
-                <span>256-bit encrypted checkout via Razorpay • Instant Pro activation</span>
+                <span>Secure digital checkout via Razorpay • Instant Pro activation</span>
               </p>
             </div>
           </div>
@@ -657,7 +661,7 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
             <div className="space-y-2">
               <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold">
                 <Check className="h-3 w-3" />
-                <span>Payment Verified by Razorpay</span>
+                <span>Payment Confirmed</span>
               </div>
               <h2 className="text-2xl font-bold text-white">Welcome to LinkPulse Pro!</h2>
               <p className="text-xs text-zinc-400 max-w-xs mx-auto">
@@ -681,7 +685,7 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
                 </div>
                 <div className="flex items-center justify-between text-zinc-400">
                   <span>Gateway:</span>
-                  <span className="text-emerald-400 font-sans font-semibold">Razorpay Verified</span>
+                  <span className="text-zinc-300 font-sans font-medium">Razorpay Gateway</span>
                 </div>
               </div>
             )}
@@ -708,6 +712,9 @@ export const PremiumBuyPage: React.FC<PremiumBuyPageProps> = ({
             </div>
           </div>
         )}
+
+        {/* Public Legal Compliance Policies Footer */}
+        <LegalFooter onOpenPolicy={onOpenLegalPolicy} className="pt-6" />
 
       </div>
     </div>

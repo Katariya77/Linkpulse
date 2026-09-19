@@ -19,6 +19,7 @@ import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
 import { WaitingExchangeScreen } from './components/WaitingExchangeScreen';
 import { RequestTimeoutModal } from './components/RequestTimeoutModal';
+import { LegalModal, LegalPolicyTab } from './components/LegalModal';
 import { 
   User, 
   UserStatus,
@@ -258,6 +259,37 @@ export default function App() {
   const [showDisputeModal, setShowDisputeModal] = useState<boolean>(false);
   const [showTrustInspector, setShowTrustInspector] = useState<boolean>(false);
 
+  // Helper to detect direct legal policy routes (Terms, Privacy, About Us, Contact, Refunds, Shipping)
+  const getLegalTabFromHash = (hash: string): LegalPolicyTab | null => {
+    const clean = hash.replace(/^#\/?/, '').toLowerCase();
+    if (['terms', 'terms-and-conditions', 'tos'].includes(clean)) return 'terms';
+    if (['privacy', 'privacy-policy'].includes(clean)) return 'privacy';
+    if (['about', 'about-us'].includes(clean)) return 'about';
+    if (['contact', 'contact-us', 'support'].includes(clean)) return 'contact';
+    if (['refunds', 'refund-policy', 'cancellation', 'cancellation-and-refunds', 'cancellation-refunds'].includes(clean)) return 'refunds';
+    if (['shipping', 'shipping-policy', 'delivery', 'shipping-delivery'].includes(clean)) return 'shipping';
+    return null;
+  };
+
+  // Public legal compliance policy modal state
+  const [legalModalTab, setLegalModalTab] = useState<LegalPolicyTab | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return getLegalTabFromHash(window.location.hash);
+  });
+
+  const handleCloseLegalModal = () => {
+    setLegalModalTab(null);
+    if (getLegalTabFromHash(window.location.hash)) {
+      const fallbackHash = sessionUser ? (isProMember ? `#${activeTab}` : '#premium') : '#auth';
+      window.history.replaceState(null, '', fallbackHash);
+    }
+  };
+
+  const handleSelectLegalTab = (tab: LegalPolicyTab) => {
+    setLegalModalTab(tab);
+    window.history.replaceState(null, '', `#${tab}`);
+  };
+
   // Global notification banner
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'alert' } | null>(null);
 
@@ -281,18 +313,20 @@ export default function App() {
   }, []);
 
   // Strict Access Control and URL / Address Bar Synchronization:
-  // - Unauthenticated visitors: ONLY allowed on 'auth'. Changing address bar URL/hash redirects to '#auth'.
-  // - Free users (logged in, !isProMember): ONLY allowed on 'premium'. Changing address bar URL/hash redirects to '#premium'.
+  // - Unauthenticated visitors: ONLY allowed on 'auth' (or legal policy modals).
+  // - Free users (logged in, !isProMember): ONLY allowed on 'premium' (or legal policy modals).
   // - Pro members and Admins: Full unhindered navigation across all tabs with live URL hash sync.
   useEffect(() => {
     if (isAuthLoading) return;
+
+    const hasLegalHash = Boolean(getLegalTabFromHash(window.location.hash));
 
     // 1. Guest users: strictly locked to 'auth'
     if (!sessionUser) {
       if (activeTab !== 'auth') {
         setActiveTab('auth');
       }
-      if (window.location.hash !== '#auth') {
+      if (window.location.hash !== '#auth' && !hasLegalHash) {
         window.history.replaceState(null, '', '#auth');
       }
       return;
@@ -303,7 +337,7 @@ export default function App() {
       if (activeTab !== 'premium') {
         setActiveTab('premium');
       }
-      if (window.location.hash !== '#premium') {
+      if (window.location.hash !== '#premium' && !hasLegalHash) {
         window.history.replaceState(null, '', '#premium');
       }
       return;
@@ -342,6 +376,12 @@ export default function App() {
   useEffect(() => {
     const handleHashOrPopState = () => {
       if (isAuthLoading) return;
+
+      const matchedLegalTab = getLegalTabFromHash(window.location.hash);
+      if (matchedLegalTab) {
+        setLegalModalTab(matchedLegalTab);
+        return;
+      }
 
       if (!sessionUser) {
         if (window.location.hash !== '#auth') {
@@ -1179,6 +1219,15 @@ export default function App() {
           onNavigateToApp={() => {}}
           onUpdateUser={handleUpdateUser}
           onToggleUserStatus={handleToggleUserStatus}
+          onOpenLegalPolicy={handleSelectLegalTab}
+        />
+
+        {/* Public Legal Compliance Policies Modal for Unauthenticated View */}
+        <LegalModal
+          isOpen={legalModalTab !== null}
+          initialTab={legalModalTab || 'terms'}
+          onClose={handleCloseLegalModal}
+          onSelectTab={handleSelectLegalTab}
         />
       </div>
     );
@@ -1252,12 +1301,14 @@ export default function App() {
             }}
             onUpdateUser={handleUpdateUser}
             onToggleUserStatus={handleToggleUserStatus}
+            onOpenLegalPolicy={handleSelectLegalTab}
           />
         ) : !isProMember ? (
           /* PLATFORM ACCESS CONTROL GATE 2: Free users CANNOT skip or access app - ONLY Premium Buy Page */
           <PremiumBuyPage
             currentUser={currentUser}
             isFirstTimeSignUp={isFirstTimeSignUp}
+            onOpenLegalPolicy={handleSelectLegalTab}
             onPlanPurchased={async ({ planName, price, razorpayPaymentId, razorpayOrderId }) => {
               const uid = sessionUser?.uid || currentUser.id || 'usr_' + Date.now();
               const email = sessionUser?.email || currentUser.email || 'user@linkpulse.io';
@@ -1426,6 +1477,7 @@ export default function App() {
             }}
             onUpdateUser={handleUpdateUser}
             onToggleUserStatus={handleToggleUserStatus}
+            onOpenLegalPolicy={handleSelectLegalTab}
           />
         )}
 
@@ -1592,6 +1644,14 @@ export default function App() {
       <RequestTimeoutModal
         partner={timeoutPartner}
         onClose={() => setTimeoutPartner(null)}
+      />
+
+      {/* Public Legal Compliance Policies Modal (Terms, Privacy, Shipping, Contact, Refunds) */}
+      <LegalModal
+        isOpen={legalModalTab !== null}
+        initialTab={legalModalTab || 'terms'}
+        onClose={handleCloseLegalModal}
+        onSelectTab={handleSelectLegalTab}
       />
 
     </div>

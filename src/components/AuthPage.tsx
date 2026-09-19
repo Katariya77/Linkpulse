@@ -39,6 +39,8 @@ import {
 } from '../lib/firebase';
 import { User } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
+import { LegalModal, LegalPolicyTab } from './LegalModal';
+import { LegalFooter } from './LegalFooter';
 
 interface AuthPageProps {
   currentUser: User;
@@ -49,6 +51,7 @@ interface AuthPageProps {
   onNavigateToPremium?: () => void;
   onUpdateUser?: (updates: Partial<User>) => void;
   onToggleUserStatus?: () => void;
+  onOpenLegalPolicy?: (tab: LegalPolicyTab) => void;
 }
 
 const AVATAR_PRESETS = [
@@ -80,7 +83,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   onNavigateToPremium,
   onUpdateUser,
   onToggleUserStatus,
+  onOpenLegalPolicy,
 }) => {
+  // Legal policy modal state (self-contained fallback if parent doesn't handle)
+  const [localLegalTab, setLocalLegalTab] = useState<LegalPolicyTab | null>(null);
+
+  const handleOpenPolicy = (tab: LegalPolicyTab) => {
+    if (onOpenLegalPolicy) {
+      onOpenLegalPolicy(tab);
+    } else {
+      setLocalLegalTab(tab);
+    }
+  };
+
   // Mode switcher for login/register modal
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showAuthCard, setShowAuthCard] = useState<boolean>(!sessionUser && !currentUser.email);
@@ -522,7 +537,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Public Legal Policies Footer (Terms, Privacy, Shipping, Contact, Refunds) */}
+          <LegalFooter onOpenPolicy={handleOpenPolicy} className="pt-2" />
         </div>
+
+        {/* Self-contained fallback Legal Modal */}
+        <LegalModal
+          isOpen={localLegalTab !== null}
+          initialTab={localLegalTab || 'terms'}
+          onClose={() => setLocalLegalTab(null)}
+          onSelectTab={(tab) => setLocalLegalTab(tab)}
+        />
       </div>
     );
   }
@@ -1352,7 +1378,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         )}
 
+        {/* Public Legal Policies Footer (Terms, Privacy, Shipping, Contact, Refunds) */}
+        <LegalFooter onOpenPolicy={handleOpenPolicy} className="pt-6" />
+
       </div>
+
+      {/* Self-contained fallback Legal Modal */}
+      <LegalModal
+        isOpen={localLegalTab !== null}
+        initialTab={localLegalTab || 'terms'}
+        onClose={() => setLocalLegalTab(null)}
+        onSelectTab={(tab) => setLocalLegalTab(tab)}
+      />
     </div>
   );
 };
