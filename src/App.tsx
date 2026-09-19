@@ -310,9 +310,25 @@ export default function App() {
     }
 
     // 3. Pro members and Admin: Full navigation allowed
+    // Helper to determine first non-hidden fallback tab for non-admin users
+    const getFirstVisibleTab = (): typeof activeTab => {
+      const candidateTabs: PublicTabId[] = ['marketplace', 'room', 'leaderboard', 'goals', 'referral', 'auth'];
+      const visible = candidateTabs.find((tabId) => !tabAccessConfig.hiddenTabs.includes(tabId));
+      return visible || 'notifications';
+    };
+
     if (activeTab === 'admin' && !isAdmin) {
-      setActiveTab('marketplace');
-      window.history.replaceState(null, '', '#marketplace');
+      const fallback = getFirstVisibleTab();
+      setActiveTab(fallback);
+      window.history.replaceState(null, '', `#${fallback}`);
+      return;
+    }
+
+    // Strict Tab Access Protocol: If a tab is hidden by admin, hide and block it for EVERYONE except admin!
+    if (!isAdmin && tabAccessConfig.hiddenTabs.includes(activeTab as any)) {
+      const fallback = getFirstVisibleTab();
+      setActiveTab(fallback);
+      window.history.replaceState(null, '', `#${fallback}`);
       return;
     }
 
@@ -320,7 +336,7 @@ export default function App() {
     if (window.location.hash !== `#${activeTab}`) {
       window.history.replaceState(null, '', `#${activeTab}`);
     }
-  }, [sessionUser, isProMember, isAdmin, isAuthLoading, activeTab]);
+  }, [sessionUser, isProMember, isAdmin, isAuthLoading, activeTab, tabAccessConfig.hiddenTabs]);
 
   // Handle browser Back/Forward navigation and manual address bar URL hash changes
   useEffect(() => {
@@ -356,10 +372,22 @@ export default function App() {
         'referral'
       ];
 
+      const getFirstVisibleTab = (): typeof activeTab => {
+        const candidateTabs: PublicTabId[] = ['marketplace', 'room', 'leaderboard', 'goals', 'referral', 'auth'];
+        const visible = candidateTabs.find((tabId) => !tabAccessConfig.hiddenTabs.includes(tabId));
+        return visible || 'notifications';
+      };
+
       if (currentHash && validTabs.includes(currentHash as any)) {
         if (currentHash === 'admin' && !isAdmin) {
-          setActiveTab('marketplace');
-          window.history.replaceState(null, '', '#marketplace');
+          const fallback = getFirstVisibleTab();
+          setActiveTab(fallback);
+          window.history.replaceState(null, '', `#${fallback}`);
+        } else if (!isAdmin && tabAccessConfig.hiddenTabs.includes(currentHash as any)) {
+          // Block non-admin users from navigating to admin-hidden tabs via hash
+          const fallback = getFirstVisibleTab();
+          setActiveTab(fallback);
+          window.history.replaceState(null, '', `#${fallback}`);
         } else {
           setActiveTab(currentHash as any);
         }
@@ -372,7 +400,7 @@ export default function App() {
       window.removeEventListener('hashchange', handleHashOrPopState);
       window.removeEventListener('popstate', handleHashOrPopState);
     };
-  }, [sessionUser, isProMember, isAdmin, isAuthLoading]);
+  }, [sessionUser, isProMember, isAdmin, isAuthLoading, tabAccessConfig.hiddenTabs]);
 
   // Sign out handler
   const handleSignOut = async () => {
@@ -387,6 +415,17 @@ export default function App() {
     setCurrentUser(INITIAL_FALLBACK_USER);
     setActiveTab('auth');
     showToast('Signed out of LinkPulse', 'info');
+  };
+
+  // Helper to safely navigate to the default landing tab (respecting admin-hidden tabs)
+  const navigateToDefaultTab = () => {
+    if (!isAdmin && tabAccessConfig.hiddenTabs.includes('marketplace')) {
+      const candidates: PublicTabId[] = ['room', 'leaderboard', 'goals', 'referral', 'auth'];
+      const available = candidates.find((t) => !tabAccessConfig.hiddenTabs.includes(t));
+      setActiveTab(available || 'notifications');
+    } else {
+      setActiveTab('marketplace');
+    }
   };
 
   // Real-time Firestore synchronization for Auth, User Profile, Peers, Trust Ledger, Proposals, and Cooldowns
@@ -1202,11 +1241,11 @@ export default function App() {
                 setIsFirstTimeSignUp(Boolean(isSignUp));
                 setActiveTab('premium');
               } else {
-                setActiveTab('marketplace');
+                navigateToDefaultTab();
               }
             }}
             onSignOut={handleSignOut}
-            onNavigateToApp={() => setActiveTab('marketplace')}
+            onNavigateToApp={() => navigateToDefaultTab()}
             onNavigateToPremium={() => {
               setIsFirstTimeSignUp(false);
               setActiveTab('premium');
@@ -1236,10 +1275,7 @@ export default function App() {
                 razorpayOrderId,
               }));
               setIsFirstTimeSignUp(false);
-              setActiveTab('marketplace');
-              if (typeof window !== 'undefined') {
-                window.location.hash = '#marketplace';
-              }
+              navigateToDefaultTab();
 
               // 2. Persist to Firestore asynchronously
               try {
@@ -1264,10 +1300,7 @@ export default function App() {
               setLocalProStatus(uid, email, 'Pro Monthly');
               setCurrentUser(prev => ({ ...prev, isPremium: true }));
               setIsFirstTimeSignUp(false);
-              setActiveTab('marketplace');
-              if (typeof window !== 'undefined') {
-                window.location.hash = '#marketplace';
-              }
+              navigateToDefaultTab();
             }}
             onSignOut={handleSignOut}
           />
@@ -1325,7 +1358,7 @@ export default function App() {
             onOpenDispute={() => setShowDisputeModal(true)}
             onBackToPool={() => {
               setProposePartner(null);
-              setActiveTab('marketplace');
+              navigateToDefaultTab();
             }}
             onJoinRoomByCode={(code) => {
               const eligible = peers.find(p => p.onlineStatus === 'online') || peers[0];
@@ -1343,7 +1376,7 @@ export default function App() {
             onProposeExchange={(peer) => {
               handleInviteToExchange(peer);
             }}
-            onBackToPool={() => setActiveTab('marketplace')}
+            onBackToPool={() => navigateToDefaultTab()}
           />
         )}
 
@@ -1358,7 +1391,7 @@ export default function App() {
               );
               showToast('Reward claimed for quest! +XP and Trust bonus applied.', 'success');
             }}
-            onBackToPool={() => setActiveTab('marketplace')}
+            onBackToPool={() => navigateToDefaultTab()}
           />
         )}
 
@@ -1415,7 +1448,7 @@ export default function App() {
                   showToast('Failed to save visibility settings.', 'alert');
                 }
               }}
-              onExitToPublic={() => setActiveTab('marketplace')}
+              onExitToPublic={() => navigateToDefaultTab()}
               onSignOut={handleSignOut}
             />
           ) : (
@@ -1440,7 +1473,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('marketplace')}
+                  onClick={() => navigateToDefaultTab()}
                   className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 transition-colors cursor-pointer"
                 >
                   Return to App
@@ -1459,8 +1492,14 @@ export default function App() {
             onDeleteNotification={handleDeleteNotification}
             onClearAllNotifications={handleClearAllNotifications}
             onResetMockNotifications={handleResetMockNotifications}
-            onNavigateToTab={(tab) => setActiveTab(tab)}
-            onBack={() => setActiveTab('marketplace')}
+            onNavigateToTab={(tab) => {
+              if (!isAdmin && tabAccessConfig.hiddenTabs.includes(tab as any)) {
+                showToast('This tab is currently hidden by the administrator.', 'alert');
+                return;
+              }
+              setActiveTab(tab);
+            }}
+            onBack={() => navigateToDefaultTab()}
           />
         )}
 
@@ -1486,10 +1525,7 @@ export default function App() {
                 razorpayOrderId,
               }));
               setIsFirstTimeSignUp(false);
-              setActiveTab('marketplace');
-              if (typeof window !== 'undefined') {
-                window.location.hash = '#marketplace';
-              }
+              navigateToDefaultTab();
 
               // 2. Persist to Firestore asynchronously
               try {
@@ -1514,10 +1550,7 @@ export default function App() {
               setLocalProStatus(uid, email, 'Pro Monthly');
               setCurrentUser(prev => ({ ...prev, isPremium: true }));
               setIsFirstTimeSignUp(false);
-              setActiveTab('marketplace');
-              if (typeof window !== 'undefined') {
-                window.location.hash = '#marketplace';
-              }
+              navigateToDefaultTab();
             }}
             onSignOut={handleSignOut}
           />
@@ -1528,7 +1561,7 @@ export default function App() {
           <ReferralPage
             currentUser={currentUser}
             initialReferralCodeFromUrl={urlReferralCode}
-            onBackToPool={() => setActiveTab('marketplace')}
+            onBackToPool={() => navigateToDefaultTab()}
             onOpenTrustInspector={() => setShowTrustInspector(true)}
           />
         )}

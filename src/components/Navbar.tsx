@@ -25,7 +25,7 @@ import {
   Crown,
   Gift
 } from 'lucide-react';
-import { User, TabAccessConfig } from '../types';
+import { User, TabAccessConfig, PublicTabId } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
 import { AuthSessionUser } from '../lib/firebase';
 import { checkIsProMember } from '../lib/firestoreService';
@@ -196,7 +196,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           badge: 'Required',
         },
       ]
-    : rawNavItems;
+    : rawNavItems.filter((item) => {
+        // Only administrators can see hidden tabs (with a badge); regular and pro users cannot see them
+        if (isAdmin) return true;
+        return !hiddenTabs.includes(item.id as any);
+      });
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-[#09090b]/95 backdrop-blur-sm">
@@ -212,7 +216,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               } else if (!isProMember) {
                 setActiveTab('premium');
               } else {
-                setActiveTab('marketplace');
+                if (!isAdmin && hiddenTabs.includes('marketplace')) {
+                  const candidates: PublicTabId[] = ['room', 'leaderboard', 'goals', 'referral', 'auth'];
+                  const available = candidates.find(t => !hiddenTabs.includes(t));
+                  setActiveTab(available || 'notifications');
+                } else {
+                  setActiveTab('marketplace');
+                }
               }
               setIsMobileMenuOpen(false);
             }}
@@ -240,7 +250,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Navigation Links (Desktop Only - lg+) - Only shown to Pro members and Admin */}
           {sessionUser && isProMember && (
           <nav className="hidden lg:flex items-center space-x-1 pl-4 border-l border-zinc-800">
-            {(isAdmin || isProMember || !hiddenTabs.includes('marketplace')) && (
+            {(isAdmin || !hiddenTabs.includes('marketplace')) && (
               <button
                 id="nav-marketplace-btn"
                 onClick={() => setActiveTab('marketplace')}
@@ -260,7 +270,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || isProMember || !hiddenTabs.includes('room')) && (
+            {(isAdmin || !hiddenTabs.includes('room')) && (
               <button
                 id="nav-room-btn"
                 onClick={() => setActiveTab('room')}
@@ -291,7 +301,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || isProMember || !hiddenTabs.includes('leaderboard')) && (
+            {(isAdmin || !hiddenTabs.includes('leaderboard')) && (
               <button
                 id="nav-leaderboard-btn"
                 onClick={() => setActiveTab('leaderboard')}
@@ -311,7 +321,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || isProMember || !hiddenTabs.includes('goals')) && (
+            {(isAdmin || !hiddenTabs.includes('goals')) && (
               <button
                 id="nav-daily-goals-btn"
                 onClick={() => setActiveTab('goals')}
@@ -334,7 +344,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || isProMember || !hiddenTabs.includes('referral')) && (
+            {(isAdmin || !hiddenTabs.includes('referral')) && (
               <button
                 id="nav-referral-btn"
                 onClick={() => setActiveTab('referral')}
@@ -357,7 +367,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {(isAdmin || isProMember || !hiddenTabs.includes('auth')) && (
+            {(isAdmin || !hiddenTabs.includes('auth')) && (
               <button
                 id="nav-auth-btn"
                 onClick={() => setActiveTab('auth')}
@@ -450,7 +460,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               {/* Quick Auth Trigger Button (Key Icon beside Profile) */}
-              {(isAdmin || !tabAccessConfig?.hideHeaderAuthKey) && (
+              {(isAdmin || (!tabAccessConfig?.hideHeaderAuthKey && !hiddenTabs.includes('auth'))) && (
                 <button
                   id="header-auth-trigger-btn"
                   onClick={() => setActiveTab('auth')}
@@ -464,7 +474,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <KeyRound className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
                   <span className="hidden sm:inline text-zinc-300 text-[11px]">Account</span>
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  {isAdmin && tabAccessConfig?.hideHeaderAuthKey && (
+                  {isAdmin && (tabAccessConfig?.hideHeaderAuthKey || hiddenTabs.includes('auth')) && (
                     <span className="text-[9px] text-amber-300 bg-amber-950/70 px-1 py-0.2 rounded border border-amber-800/60 ml-0.5">
                       Hidden
                     </span>
@@ -619,45 +629,49 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </button>
 
                         {/* 2. Profile (clicking on it will redirect to profile page) */}
-                        <button
-                          type="button"
-                          id="profile-dropdown-view-profile-btn"
-                          onClick={() => {
-                            setActiveTab('auth');
-                            setIsProfileMenuOpen(false);
-                          }}
-                          className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
-                              <UserIcon className="h-3.5 w-3.5" />
+                        {(isAdmin || !hiddenTabs.includes('auth')) && (
+                          <button
+                            type="button"
+                            id="profile-dropdown-view-profile-btn"
+                            onClick={() => {
+                              setActiveTab('auth');
+                              setIsProfileMenuOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="h-6 w-6 rounded-md bg-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-white group-hover:bg-zinc-700 transition-colors">
+                                <UserIcon className="h-3.5 w-3.5" />
+                              </div>
+                              <span className="font-semibold text-xs text-white">Profile & Settings</span>
                             </div>
-                            <span className="font-semibold text-xs text-white">Profile & Settings</span>
-                          </div>
-                          <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                        </button>
+                            <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                          </button>
+                        )}
 
                         {/* Referral Program shortcut */}
-                        <button
-                          type="button"
-                          id="profile-dropdown-referrals-btn"
-                          onClick={() => {
-                            setActiveTab('referral');
-                            setIsProfileMenuOpen(false);
-                          }}
-                          className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <div className="h-6 w-6 rounded-md bg-emerald-950/70 border border-emerald-800/60 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-900 transition-colors">
-                              <Gift className="h-3.5 w-3.5" />
+                        {(isAdmin || !hiddenTabs.includes('referral')) && (
+                          <button
+                            type="button"
+                            id="profile-dropdown-referrals-btn"
+                            onClick={() => {
+                              setActiveTab('referral');
+                              setIsProfileMenuOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div className="h-6 w-6 rounded-md bg-emerald-950/70 border border-emerald-800/60 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-900 transition-colors">
+                                <Gift className="h-3.5 w-3.5" />
+                              </div>
+                              <div>
+                                <span className="font-semibold text-xs text-white block">Referral Program</span>
+                                <span className="text-[10px] text-emerald-400 block">+2 Trust Boost / Invite</span>
+                              </div>
                             </div>
-                            <div>
-                              <span className="font-semibold text-xs text-white block">Referral Program</span>
-                              <span className="text-[10px] text-emerald-400 block">+2 Trust Boost / Invite</span>
-                            </div>
-                          </div>
-                          <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                        </button>
+                            <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                          </button>
+                        )}
 
                         {/* 3. Sign Out button */}
                         {onSignOut && (
@@ -747,7 +761,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                       } else if (!isProMember) {
                         setActiveTab('premium');
                       } else {
-                        setActiveTab('marketplace');
+                        if (!isAdmin && hiddenTabs.includes('marketplace')) {
+                          const candidates: PublicTabId[] = ['room', 'leaderboard', 'goals', 'referral', 'auth'];
+                          const available = candidates.find(t => !hiddenTabs.includes(t));
+                          setActiveTab(available || 'notifications');
+                        } else {
+                          setActiveTab('marketplace');
+                        }
                       }
                       setIsMobileMenuOpen(false);
                     }}
