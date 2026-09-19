@@ -3,7 +3,7 @@ export type TrustTier = 'elite' | 'reliable' | 'caution' | 'at_risk' | 'suspende
 export type PackageType = '5x5' | '10x10';
 export type UserRole = 'admin' | 'member';
 
-export type PublicTabId = 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth';
+export type PublicTabId = 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'referral';
 
 export interface TabAccessConfig {
   hiddenTabs: PublicTabId[];
@@ -79,6 +79,12 @@ export const PUBLIC_TABS_LIST: PublicTabMeta[] = [
     description: 'User registration, login, and profile settings',
     defaultVisible: true,
   },
+  {
+    id: 'referral',
+    name: 'Referral',
+    description: 'Generate invitation links, invite peers, and earn Referral XP to boost trust score',
+    defaultVisible: true,
+  },
 ];
 
 export interface User {
@@ -87,6 +93,10 @@ export interface User {
   avatar: string;
   onlineStatus: UserStatus;
   trustScore: number; // 0 - 100
+  referralCode?: string;
+  referralXp?: number;
+  referralsCount?: number;
+  referredBy?: string;
   successRate: number; // %
   lifetimeExchanges: number;
   activeStreak: number;
@@ -185,8 +195,22 @@ export interface TrustLedgerEntry {
   delta: number; // e.g. +2, -10, -15
   resultingScore: number;
   reason: string;
-  category: 'exchange_success' | 'session_abandon' | 'dispute_penalty' | 'streak_bonus' | 'idle_timeout';
+  category: 'exchange_success' | 'session_abandon' | 'dispute_penalty' | 'streak_bonus' | 'idle_timeout' | 'referral_bonus';
   sessionRef?: string;
+}
+
+export interface ReferralRecord {
+  id: string;
+  referrerId: string;
+  referrerEmail?: string;
+  referrerCode: string;
+  referredUserId: string;
+  referredUsername: string;
+  referredAvatar?: string;
+  referralXpAwarded: number;
+  trustScoreBoostAwarded: number;
+  status: 'joined' | 'verified' | 'active_exchange';
+  createdAt: string;
 }
 
 export interface IPCooldownRecord {

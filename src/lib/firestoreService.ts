@@ -23,7 +23,8 @@ import {
   PublicTabId,
   TabAccessConfig,
   DEFAULT_TAB_ACCESS,
-  PremiumSubscription
+  PremiumSubscription,
+  ReferralRecord
 } from '../types';
 
 export const ADMIN_EMAIL = 'test@gmail.com';
@@ -225,12 +226,20 @@ export function syncUserProfile(
   getDoc(userDocRef).then((snap) => {
     if (!snap.exists()) {
       const isAdminAccount = (sessionUser.email || '').trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const generatedRefCode = 'LP-' + (sessionUser.displayName || sessionUser.email?.split('@')[0] || 'CREATOR')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .toUpperCase()
+        .slice(0, 6) + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+
       const initialProfile: User = {
         id: sessionUser.uid,
         username: sessionUser.displayName || (isAdminAccount ? 'Admin (test)' : (sessionUser.email?.split('@')[0] || 'PeerUser')),
         avatar: sessionUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         onlineStatus: 'online',
         trustScore: 100,
+        referralCode: generatedRefCode,
+        referralXp: 0,
+        referralsCount: 0,
         successRate: 100,
         lifetimeExchanges: 0,
         activeStreak: 1,
@@ -280,12 +289,26 @@ export function syncUserProfile(
         sessionUser
       );
 
+      // Backfill referralCode if absent on existing account
+      let userReferralCode = data.referralCode;
+      if (!userReferralCode) {
+        userReferralCode = 'LP-' + (data.username || sessionUser.displayName || 'CREATOR')
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toUpperCase()
+          .slice(0, 6) + '-' + snap.id.slice(0, 4).toUpperCase();
+        setDoc(userDocRef, { referralCode: userReferralCode, referralXp: data.referralXp || 0, referralsCount: data.referralsCount || 0 }, { merge: true }).catch(() => {});
+      }
+
       const user: User = {
         id: snap.id,
         username: data.username || sessionUser.displayName || (isAdminAccount ? 'Admin (test)' : 'PeerUser'),
         avatar: data.avatar || sessionUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         onlineStatus: data.onlineStatus || 'online',
         trustScore: typeof data.trustScore === 'number' ? data.trustScore : 100,
+        referralCode: userReferralCode,
+        referralXp: typeof data.referralXp === 'number' ? data.referralXp : 0,
+        referralsCount: typeof data.referralsCount === 'number' ? data.referralsCount : 0,
+        referredBy: data.referredBy || undefined,
         successRate: typeof data.successRate === 'number' ? data.successRate : 100,
         lifetimeExchanges: typeof data.lifetimeExchanges === 'number' ? data.lifetimeExchanges : 0,
         activeStreak: typeof data.activeStreak === 'number' ? data.activeStreak : 1,
@@ -989,3 +1012,312 @@ export function subscribeToAllUsers(
 
   return unsubscribe;
 }
+
+/**
+ * Real-time listener for referrals belonging to a specific referrer user.
+ */
+export function subscribeToUserReferrals(
+  userId: string,
+  onUpdate: (referrals: ReferralRecord[]) => void
+): () => void {
+  if (!db || !userId) {
+    onUpdate([]);
+    return () => {};
+  }
+
+  const referralsCol = collection(db, 'referrals');
+  const q = query(referralsCol, where('referrerId', '==', userId));
+
+  const unsubscribe = onSnapshot(q, (snap) => {
+    const list: ReferralRecord[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      list.push({
+        id: d.id,
+        referrerId: data.referrerId || userId,
+        referrerEmail: data.referrerEmail || undefined,
+        referrerCode: data.referrerCode || 'LP-CODE',
+        referredUserId: data.referredUserId || 'usr_peer',
+        referredUsername: data.referredUsername || 'Invited Creator',
+        referredAvatar: data.referredAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        referralXpAwarded: typeof data.referralXpAwarded === 'number' ? data.referralXpAwarded : 50,
+        trustScoreBoostAwarded: typeof data.trustScoreBoostAwarded === 'number' ? data.trustScoreBoostAwarded : 2,
+        status: data.status || 'joined',
+        createdAt: data.createdAt ? (typeof data.createdAt === 'string' ? data.createdAt : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })) : 'Recently',
+      });
+    });
+
+    // Sort newest first
+    list.sort((a, b) => b.id.localeCompare(a.id));
+    onUpdate(list);
+  }, (err) => {
+    console.warn('User referrals snapshot warning:', err);
+    onUpdate([]);
+  });
+
+  return unsubscribe;
+}
+
+/**
+ * Records a successful referral award: grants Referral XP, boosts trust score, and writes a trust ledger entry.
+ */
+export async function recordReferralAward(
+  referrerUser: User,
+  invitedUsername: string,
+  invitedAvatar: string = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  xpAmount: number = 50,
+  trustBoost: number = 2
+): Promise<{ success: boolean; newScore: number; newXp: number; record: ReferralRecord }> {
+  const referrerId = referrerUser.id;
+  const currentTrustScore = referrerUser.trustScore ?? 100;
+  const currentReferralXp = referrerUser.referralXp ?? 0;
+  const currentCount = referrerUser.referralsCount ?? 0;
+
+  const newScore = Math.min(100, Math.max(0, currentTrustScore + trustBoost));
+  const newXp = currentReferralXp + xpAmount;
+  const newCount = currentCount + 1;
+
+  const referralDocId = 'ref_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+  const nowFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const record: ReferralRecord = {
+    id: referralDocId,
+    referrerId,
+    referrerEmail: referrerUser.email,
+    referrerCode: referrerUser.referralCode || 'LP-LINKPULSE',
+    referredUserId: 'usr_invited_' + Date.now(),
+    referredUsername: invitedUsername,
+    referredAvatar: invitedAvatar,
+    referralXpAwarded: xpAmount,
+    trustScoreBoostAwarded: trustBoost,
+    status: 'joined',
+    createdAt: nowFormatted,
+  };
+
+  if (db && referrerId) {
+    try {
+      // 1. Create referral document
+      await setDoc(doc(db, 'referrals', referralDocId), {
+        ...record,
+        timestamp: serverTimestamp(),
+      });
+
+      // 2. Append trust ledger audit entry
+      await addDoc(collection(db, 'trust_ledger'), {
+        userId: referrerId,
+        delta: trustBoost,
+        resultingScore: newScore,
+        reason: `Referral XP Award: Invited @${invitedUsername} to LinkPulse network (+${trustBoost} Trust pts, +${xpAmount} XP)`,
+        category: 'referral_bonus',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: serverTimestamp(),
+      });
+
+      // 3. Update user profile metrics
+      await setDoc(doc(db, 'users', referrerId), {
+        trustScore: newScore,
+        referralXp: newXp,
+        referralsCount: newCount,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Error saving referral in Firestore:', e);
+    }
+  }
+
+  return { success: true, newScore, newXp, record };
+}
+
+/**
+ * Simulates a peer joining LinkPulse through the user's invitation link.
+ * Used for live demonstration, onboarding preview, and interactive validation.
+ */
+export async function simulateReferralInvitation(
+  referrerUser: User,
+  customName?: string
+): Promise<{ success: boolean; message: string; record: ReferralRecord; newScore: number; newXp: number }> {
+  const samplePeers = [
+    { name: 'Devon Miles', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80' },
+    { name: 'Sora Tanaka', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
+    { name: 'Priya Patel', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80' },
+    { name: 'Mateo Rossi', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80' },
+    { name: 'Kiran Verma', avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80' },
+    { name: 'Aaliyah Bennett', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80' },
+  ];
+
+  const randomPeer = samplePeers[Math.floor(Math.random() * samplePeers.length)];
+  const invitedName = customName || randomPeer.name;
+  const invitedAvatar = randomPeer.avatar;
+
+  const result = await recordReferralAward(referrerUser, invitedName, invitedAvatar, 50, 2);
+
+  return {
+    success: true,
+    message: `@${invitedName} joined LinkPulse through your invitation link! You earned +50 Referral XP and +2 Trust Score boost.`,
+    record: result.record,
+    newScore: result.newScore,
+    newXp: result.newXp,
+  };
+}
+
+/**
+ * Redeems an invitation referral code for the current user.
+ * Awards the referrer +50 Referral XP & +2 Trust Score boost, and awards the claimer +25 welcome XP!
+ */
+export async function redeemReferralCode(
+  code: string,
+  currentUser: User
+): Promise<{ success: boolean; message: string; xpAwarded: number; trustBoostAwarded: number }> {
+  const cleanCode = code.trim().toUpperCase();
+  if (!cleanCode) {
+    return { success: false, message: 'Please provide a valid referral code.', xpAwarded: 0, trustBoostAwarded: 0 };
+  }
+
+  if (currentUser.referralCode && currentUser.referralCode.toUpperCase() === cleanCode) {
+    return { success: false, message: 'You cannot redeem your own invitation code.', xpAwarded: 0, trustBoostAwarded: 0 };
+  }
+
+  if (currentUser.referredBy) {
+    return { success: false, message: `You have already redeemed an invitation code (${currentUser.referredBy}).`, xpAwarded: 0, trustBoostAwarded: 0 };
+  }
+
+  if (!db) {
+    return {
+      success: true,
+      message: `Referral code ${cleanCode} redeemed! You received +25 Welcome XP.`,
+      xpAwarded: 25,
+      trustBoostAwarded: 1,
+    };
+  }
+
+  try {
+    // Look up referrer by referralCode
+    const usersCol = collection(db, 'users');
+    const q = query(usersCol, where('referralCode', '==', cleanCode));
+    const snap = await getDocs(q);
+
+    let referrerDocId: string | null = null;
+    let referrerData: any = null;
+
+    if (!snap.empty) {
+      const firstDoc = snap.docs[0];
+      referrerDocId = firstDoc.id;
+      referrerData = firstDoc.data();
+    }
+
+    if (referrerDocId && referrerDocId === currentUser.id) {
+      return { success: false, message: 'You cannot redeem your own invitation code.', xpAwarded: 0, trustBoostAwarded: 0 };
+    }
+
+    // 1. Award claimer +25 XP and mark referredBy
+    const currentClaimerXp = currentUser.referralXp || 0;
+    const currentClaimerScore = currentUser.trustScore || 100;
+    const updatedClaimerScore = Math.min(100, currentClaimerScore + 1);
+
+    await setDoc(doc(db, 'users', currentUser.id), {
+      referredBy: cleanCode,
+      referralXp: currentClaimerXp + 25,
+      trustScore: updatedClaimerScore,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    // Claimer audit log
+    await addDoc(collection(db, 'trust_ledger'), {
+      userId: currentUser.id,
+      delta: 1,
+      resultingScore: updatedClaimerScore,
+      reason: `Welcome Bonus for joining via referral code ${cleanCode} (+1 Trust pt, +25 XP)`,
+      category: 'referral_bonus',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: serverTimestamp(),
+    });
+
+    // 2. If referrer found in DB, award referrer +50 XP and +2 Trust Score
+    if (referrerDocId && referrerData) {
+      const referrerNewScore = Math.min(100, (referrerData.trustScore ?? 100) + 2);
+      const referrerNewXp = (referrerData.referralXp ?? 0) + 50;
+      const referrerNewCount = (referrerData.referralsCount ?? 0) + 1;
+
+      await setDoc(doc(db, 'users', referrerDocId), {
+        trustScore: referrerNewScore,
+        referralXp: referrerNewXp,
+        referralsCount: referrerNewCount,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      // Create record in referrals collection
+      const refId = 'ref_' + Date.now();
+      await setDoc(doc(db, 'referrals', refId), {
+        id: refId,
+        referrerId: referrerDocId,
+        referrerEmail: referrerData.email,
+        referrerCode: cleanCode,
+        referredUserId: currentUser.id,
+        referredUsername: currentUser.username || 'Creator Peer',
+        referredAvatar: currentUser.avatar,
+        referralXpAwarded: 50,
+        trustScoreBoostAwarded: 2,
+        status: 'joined',
+        createdAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        timestamp: serverTimestamp(),
+      });
+
+      // Referrer audit log
+      await addDoc(collection(db, 'trust_ledger'), {
+        userId: referrerDocId,
+        delta: 2,
+        resultingScore: referrerNewScore,
+        reason: `Referral XP & Trust Boost: @${currentUser.username} redeemed your invitation code ${cleanCode} (+2 Trust pts, +50 XP)`,
+        category: 'referral_bonus',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    return {
+      success: true,
+      message: `Invitation code ${cleanCode} claimed successfully! +25 Welcome XP and +1 Trust Score boost credited.`,
+      xpAwarded: 25,
+      trustBoostAwarded: 1,
+    };
+  } catch (err: any) {
+    console.error('Error claiming referral code:', err);
+    return { success: false, message: 'Could not claim referral code: ' + (err?.message || 'Network error'), xpAwarded: 0, trustBoostAwarded: 0 };
+  }
+}
+
+/**
+ * Allows a user to customize their unique referral handle/code.
+ */
+export async function updateUserReferralCode(
+  userId: string,
+  newCode: string
+): Promise<{ success: boolean; message?: string }> {
+  const sanitized = newCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (sanitized.length < 3 || sanitized.length > 20) {
+    return { success: false, message: 'Referral code must be between 3 and 20 alphanumeric characters.' };
+  }
+
+  if (!db || !userId) {
+    return { success: true };
+  }
+
+  try {
+    // Check if code is already taken
+    const q = query(collection(db, 'users'), where('referralCode', '==', sanitized));
+    const snap = await getDocs(q);
+    if (!snap.empty && snap.docs.some(d => d.id !== userId)) {
+      return { success: false, message: 'This referral code is already in use by another creator. Please pick a unique handle.' };
+    }
+
+    await setDoc(doc(db, 'users', userId), {
+      referralCode: sanitized,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Failed to update referral code.' };
+  }
+}
+

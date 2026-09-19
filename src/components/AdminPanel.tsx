@@ -17,7 +17,8 @@ import {
   Lock, 
   Shield,
   Sparkles,
-  Crown
+  Crown,
+  Gift
 } from 'lucide-react';
 import { User, PublicTabId, TabAccessConfig, PUBLIC_TABS_LIST, PremiumSubscription } from '../types';
 import { AuthSessionUser } from '../lib/firebase';
@@ -45,6 +46,7 @@ const TAB_ICONS: Record<PublicTabId, React.ComponentType<{ className?: string; s
   leaderboard: Trophy,
   goals: Target,
   auth: KeyRound,
+  referral: Gift,
 };
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({

@@ -22,7 +22,8 @@ import {
   ShieldAlert,
   Bell,
   User as UserIcon,
-  Crown
+  Crown,
+  Gift
 } from 'lucide-react';
 import { User, TabAccessConfig } from '../types';
 import { getTrustTier } from '../utils/trustUtils';
@@ -32,8 +33,8 @@ import { checkIsProMember } from '../lib/firestoreService';
 interface NavbarProps {
   currentUser: User;
   sessionUser?: AuthSessionUser | null;
-  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium';
-  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium') => void;
+  activeTab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium' | 'referral';
+  setActiveTab: (tab: 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium' | 'referral') => void;
   hasActiveSession: boolean;
   activeRoomCode?: string;
   isAdmin?: boolean;
@@ -145,6 +146,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       subtitle: 'Daily exchange challenges & milestones',
       icon: Target,
       badge: '2/4',
+    },
+    {
+      id: 'referral' as const,
+      label: 'Referrals',
+      subtitle: 'Invite peers & earn Trust XP boosts',
+      icon: Gift,
+      badge: currentUser.referralXp ? `${currentUser.referralXp} XP` : '+2 Trust',
     },
     {
       id: 'auth' as const,
@@ -322,6 +330,29 @@ export const Navbar: React.FC<NavbarProps> = ({
                   2/4
                 </span>
                 {isAdmin && hiddenTabs.includes('goals') && (
+                  <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
+                    Hidden
+                  </span>
+                )}
+              </button>
+            )}
+
+            {(isAdmin || !hiddenTabs.includes('referral')) && (
+              <button
+                id="nav-referral-btn"
+                onClick={() => setActiveTab('referral')}
+                className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === 'referral'
+                    ? 'bg-zinc-800 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                }`}
+              >
+                <Gift className="h-3.5 w-3.5 text-emerald-400" strokeWidth={1.5} />
+                <span>Referral</span>
+                <span className="rounded bg-emerald-950/80 px-1.5 py-0.2 text-[10px] text-emerald-400 border border-emerald-800/60 tabular-nums">
+                  {currentUser.referralsCount ? `${currentUser.referralsCount}` : '+2 PTS'}
+                </span>
+                {isAdmin && hiddenTabs.includes('referral') && (
                   <span className="text-[9px] text-amber-300 bg-amber-950/60 px-1 py-0.2 rounded border border-amber-800/60">
                     Hidden
                   </span>
@@ -609,6 +640,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                         </button>
 
+                        {/* Referral Program shortcut */}
+                        <button
+                          type="button"
+                          id="profile-dropdown-referrals-btn"
+                          onClick={() => {
+                            setActiveTab('referral');
+                            setIsProfileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between p-2 rounded-lg text-xs font-medium text-zinc-200 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className="h-6 w-6 rounded-md bg-emerald-950/70 border border-emerald-800/60 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-900 transition-colors">
+                              <Gift className="h-3.5 w-3.5" />
+                            </div>
+                            <div>
+                              <span className="font-semibold text-xs text-white block">Referral Program</span>
+                              <span className="text-[10px] text-emerald-400 block">+2 Trust Boost / Invite</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                        </button>
+
                         {/* 3. Sign Out button */}
                         {onSignOut && (
                           <button
@@ -655,20 +708,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           </>
           )}
 
-          {/* Mobile & Tablet Sidebar Toggle Button */}
-          <button
-            id="mobile-sidebar-toggle-btn"
-            type="button"
-            aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="flex lg:hidden items-center justify-center h-8 w-8 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors ml-1 focus:outline-none cursor-pointer"
-          >
-            {isMobileMenuOpen ? (
-              <X className="h-4 w-4 text-white" strokeWidth={2} />
-            ) : (
-              <Menu className="h-4 w-4 text-zinc-200" strokeWidth={2} />
-            )}
-          </button>
+          {/* Mobile & Tablet Sidebar Toggle Button (Only for Pro members or unauthenticated visitors) */}
+          {(isProMember || !sessionUser) && (
+            <button
+              id="mobile-sidebar-toggle-btn"
+              type="button"
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="flex lg:hidden items-center justify-center h-8 w-8 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors ml-1 focus:outline-none cursor-pointer"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-4 w-4 text-white" strokeWidth={2} />
+              ) : (
+                <Menu className="h-4 w-4 text-zinc-200" strokeWidth={2} />
+              )}
+            </button>
+          )}
         </div>
 
       </div>
@@ -690,7 +745,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="max-w-2xl w-full mx-auto flex items-center justify-between">
                   <button
                     onClick={() => {
-                      setActiveTab('marketplace');
+                      if (!sessionUser) {
+                        setActiveTab('auth');
+                      } else if (!isProMember) {
+                        setActiveTab('premium');
+                      } else {
+                        setActiveTab('marketplace');
+                      }
                       setIsMobileMenuOpen(false);
                     }}
                     className="text-left focus:outline-none cursor-pointer"
@@ -806,8 +867,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </motion.button>
                       );
                     })}
-                    {/* Admin button on public sidebar only visible to admin role */}
-                    {isAdmin && (
+                    {/* Admin button on public sidebar only visible to authenticated admin with Pro status */}
+                    {sessionUser && isProMember && isAdmin && (
                       <div className="pt-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-red-400 px-2 pb-2 flex items-center space-x-1.5">
                           <ShieldAlert className="h-3.5 w-3.5 text-red-400" />

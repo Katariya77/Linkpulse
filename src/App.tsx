@@ -13,6 +13,7 @@ import { AuthPage } from './components/AuthPage';
 import { AdminPanel } from './components/AdminPanel';
 import { NotificationsPage } from './components/NotificationsPage';
 import { PremiumBuyPage } from './components/PremiumBuyPage';
+import { ReferralPage } from './components/ReferralPage';
 import { subscribeToAuth, logoutUser, firebaseConfig, AuthSessionUser } from './lib/firebase';
 import { DisputeModal } from './components/DisputeModal';
 import { TrustInspectorModal } from './components/TrustInspectorModal';
@@ -54,7 +55,8 @@ import {
   ADMIN_EMAIL,
   activatePremiumSubscription,
   checkIsProMember,
-  setLocalProStatus
+  setLocalProStatus,
+  clearLocalProStatus
 } from './lib/firestoreService';
 import { extractDomain, formatTimeRemaining } from './utils/trustUtils';
 import { ShieldCheck, Check, AlertCircle, Sparkles, X, Shield } from 'lucide-react';
@@ -155,8 +157,35 @@ const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
 
 export default function App() {
   // Navigation tab (Default to 'auth' for new/unauthenticated visitors)
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium'>('auth');
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'admin' | 'notifications' | 'premium' | 'referral'>('auth');
   const [isFirstTimeSignUp, setIsFirstTimeSignUp] = useState<boolean>(false);
+
+  // Incoming referral link detection (?ref=LP-XYZ)
+  const [urlReferralCode, setUrlReferralCode] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ref = urlParams.get('ref');
+      if (ref) return ref.trim().toUpperCase();
+      try {
+        return sessionStorage.getItem('linkpulse_pending_ref') || '';
+      } catch (e) {}
+    }
+    return '';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ref = urlParams.get('ref');
+      if (ref) {
+        const cleanRef = ref.trim().toUpperCase();
+        setUrlReferralCode(cleanRef);
+        try {
+          sessionStorage.setItem('linkpulse_pending_ref', cleanRef);
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   // Firebase authenticated session state
   const [sessionUser, setSessionUser] = useState<AuthSessionUser | null>(null);
@@ -291,7 +320,8 @@ export default function App() {
         'auth',
         'admin',
         'notifications',
-        'premium'
+        'premium',
+        'referral'
       ];
 
       if (currentHash && validTabs.includes(currentHash as any)) {
@@ -339,6 +369,8 @@ export default function App() {
     } catch (e) {
       console.warn('Sign out warning:', e);
     }
+    clearLocalProStatus();
+    setIsFirstTimeSignUp(false);
     setSessionUser(null);
     setCurrentUser(INITIAL_FALLBACK_USER);
     setActiveTab('auth');
@@ -1074,7 +1106,7 @@ export default function App() {
         <AuthPage
           currentUser={currentUser}
           sessionUser={null}
-          onAuthSuccess={(user) => {
+          onAuthSuccess={(user, isSignUp) => {
             setSessionUser(user);
             setCurrentUser(prev => ({
               ...prev,
@@ -1083,8 +1115,14 @@ export default function App() {
               avatar: user.photoURL || prev.avatar,
               authProvider: user.providerId,
             }));
+            const isPro = checkIsProMember(currentUser, user);
             showToast(`Welcome to LinkPulse, ${user.displayName || user.email}!`, 'success');
-            setActiveTab('marketplace');
+            if (isSignUp || !isPro) {
+              setIsFirstTimeSignUp(Boolean(isSignUp));
+              setActiveTab('premium');
+            } else {
+              setActiveTab('marketplace');
+            }
           }}
           onSignOut={handleSignOut}
           onNavigateToApp={() => {}}
@@ -1146,9 +1184,10 @@ export default function App() {
                 avatar: user.photoURL || prev.avatar,
                 authProvider: user.providerId,
               }));
+              const isPro = checkIsProMember(currentUser, user);
               showToast(`Logged in as ${user.displayName || user.email}`, 'success');
-              if (isSignUp) {
-                setIsFirstTimeSignUp(true);
+              if (isSignUp || !isPro) {
+                setIsFirstTimeSignUp(Boolean(isSignUp));
                 setActiveTab('premium');
               } else {
                 setActiveTab('marketplace');
@@ -1325,9 +1364,10 @@ export default function App() {
                 avatar: user.photoURL || prev.avatar,
                 authProvider: user.providerId,
               }));
+              const isPro = checkIsProMember(currentUser, user);
               showToast(`Logged in as ${user.displayName || user.email}`, 'success');
-              if (isSignUp) {
-                setIsFirstTimeSignUp(true);
+              if (isSignUp || !isPro) {
+                setIsFirstTimeSignUp(Boolean(isSignUp));
                 setActiveTab('premium');
               } else {
                 setActiveTab('marketplace');
@@ -1468,6 +1508,16 @@ export default function App() {
               }
             }}
             onSignOut={handleSignOut}
+          />
+        )}
+
+        {/* Tab 9: Dedicated Referral & Invitation Program */}
+        {activeTab === 'referral' && (
+          <ReferralPage
+            currentUser={currentUser}
+            initialReferralCodeFromUrl={urlReferralCode}
+            onBackToPool={() => setActiveTab('marketplace')}
+            onOpenTrustInspector={() => setShowTrustInspector(true)}
           />
         )}
           </>

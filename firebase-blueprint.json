@@ -9,6 +9,10 @@
         "username": { "type": "string" },
         "email": { "type": "string" },
         "trustScore": { "type": "number" },
+        "referralCode": { "type": "string" },
+        "referralXp": { "type": "number" },
+        "referralsCount": { "type": "number" },
+        "referredBy": { "type": "string" },
         "exchangesCompleted": { "type": "number" },
         "dwellComplianceRate": { "type": "number" },
         "ratingAverage": { "type": "number" },
@@ -42,11 +46,30 @@
         "userId": { "type": "string" },
         "delta": { "type": "number" },
         "resultingScore": { "type": "number" },
-        "category": { "type": "string", "enum": ["dwell_compliance", "speed_bonus", "milestone", "penalty", "dispute", "manual_adjustment"] },
+        "category": { "type": "string", "enum": ["dwell_compliance", "speed_bonus", "milestone", "penalty", "dispute", "manual_adjustment", "referral_bonus"] },
         "reason": { "type": "string" },
         "timestamp": { "type": "string" }
       },
       "required": ["id", "userId", "delta", "resultingScore", "category", "reason"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "Invitation and referral reward tracking linking referrers with invited peers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referrerId": { "type": "string" },
+        "referrerEmail": { "type": "string" },
+        "referrerCode": { "type": "string" },
+        "referredUserId": { "type": "string" },
+        "referredUsername": { "type": "string" },
+        "referredAvatar": { "type": "string" },
+        "referralXpAwarded": { "type": "number" },
+        "trustScoreBoostAwarded": { "type": "number" },
+        "status": { "type": "string", "enum": ["joined", "verified", "active_exchange"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "referrerId", "referrerCode", "referredUserId", "referralXpAwarded", "trustScoreBoostAwarded", "status"]
     },
     "IPCooldownRecord": {
       "title": "IPCooldownRecord",
@@ -119,6 +142,10 @@
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/AppSettings" },
       "description": "Global system configurations including tab visibility settings."
+    },
+    "/referrals/{referralId}": {
+      "schema": { "$ref": "#/entities/Referral" },
+      "description": "Referral tracking records linking referrers with invited creators."
     }
   }
 }

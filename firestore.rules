@@ -56,6 +56,13 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    // Referrals and invitations collection
+    match /referrals/{referralId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(referralId);
+      allow delete: if isSignedIn();
+    }
+
     // Connection validation test endpoint
     match /test/{testId} {
       allow read, write: if true;
