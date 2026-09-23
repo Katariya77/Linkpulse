@@ -8,14 +8,23 @@ import {
   Lock, 
   Star, 
   Activity, 
-  Sliders,
-  Eye,
+  Sliders, 
+  Eye, 
   Radio,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowLeft,
+  Menu
 } from 'lucide-react';
 import { ExchangeSession, ExchangeLink, User } from '../types';
 import { getTrustTier, extractDomain } from '../utils/trustUtils';
+
+interface ActivityItem {
+  id: string;
+  text: string;
+  timestamp: string;
+  actor: 'you' | 'partner' | 'system';
+}
 
 interface ExchangeRoomProps {
   session: ExchangeSession;
@@ -36,14 +45,16 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   onOpenDispute,
   onCloseRoom,
 }) => {
-  const [simulationSpeed, setSimulationSpeed] = useState<'normal' | 'fast' | 'instant'>('fast');
+  const [simulationSpeed] = useState<'normal' | 'fast' | 'instant'>('normal');
   const [activeUserLinkIndex, setActiveUserLinkIndex] = useState<number>(0);
   const [isTabFocused, setIsTabFocused] = useState<boolean>(true);
   const [currentDwellCountdown, setCurrentDwellCountdown] = useState<number>(0);
   const [isDwellRunning, setIsDwellRunning] = useState<boolean>(false);
   const [openedLinkIds, setOpenedLinkIds] = useState<Set<string>>(new Set());
 
-  // Toggle dropdown view to see all links vs single active link
+  // UI toggle states
+  const [showRoomMenu, setShowRoomMenu] = useState<boolean>(false);
+  const [showSessionDetails, setShowSessionDetails] = useState<boolean>(false);
   const [showAllUserQueue, setShowAllUserQueue] = useState<boolean>(false);
   const [showAllPartnerProgress, setShowAllPartnerProgress] = useState<boolean>(false);
 
@@ -58,11 +69,20 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
 
   const partnerLinks = Array.isArray(session?.partnerLinks) ? session.partnerLinks : [];
   const userLinks = Array.isArray(session?.userLinks) ? session.userLinks : [];
-  const partner = session?.partner || {
+  const partner: User = session?.partner || {
     id: 'partner_fallback',
     username: 'Partner',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    onlineStatus: 'online',
     trustScore: 80,
+    successRate: 100,
+    lifetimeExchanges: 15,
+    activeStreak: 3,
+    preferredShorteners: ['ShrinkMe', 'Linkvertise'],
     ipAddress: '192.168.1.1',
+    country: 'India',
+    countryCode: 'IN',
+    joinedDate: '2025-01-01',
   };
   const partnerTelemetry = session?.partnerTelemetry || {
     currentLinkIndex: 0,
@@ -93,6 +113,33 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   const isPartnerAllDone = partnerTotalCount > 0 && partnerVerifiedCount === partnerTotalCount;
 
   const isBothCompleted = userProgressPercent === 100 && partnerProgressPercent === 100;
+
+  // Format room code as #LP-57354
+  const rawRoomCode = session?.roomCode || '#57354';
+  const cleanRoomCode = rawRoomCode.replace(/^#/, '');
+  const formattedRoomCode = cleanRoomCode.startsWith('LP-') ? cleanRoomCode : `LP-${cleanRoomCode}`;
+
+  // Live Activity Log with timestamps
+  const [activityLog, setActivityLog] = useState<ActivityItem[]>(() => {
+    const now = Date.now();
+    const formatTime = (offsetMs: number) =>
+      new Date(now - offsetMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    return [
+      {
+        id: 'act-init-1',
+        text: `Exchange #${formattedRoomCode} initialized`,
+        timestamp: formatTime(65000),
+        actor: 'system',
+      },
+      {
+        id: 'act-init-2',
+        text: `@${partner.username} connected as Active Partner`,
+        timestamp: formatTime(42000),
+        actor: 'partner',
+      },
+    ];
+  });
 
   useEffect(() => {
     const handleFocus = () => setIsTabFocused(true);
@@ -183,6 +230,19 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             verifiedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           const newCompletedCount = updatedUserLinks.filter(l => l.status === 'verified').length;
+          
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setActivityLog(prev => [
+            {
+              id: `act-partner-${Date.now()}-${nextPendingIndex}`,
+              text: `@${partner.username} completed Link #${nextPendingIndex + 1}`,
+              timestamp: timeStr,
+              actor: 'partner',
+            },
+            ...prev,
+          ]);
+
           onUpdateSession({
             ...session,
             userLinks: updatedUserLinks,
@@ -245,6 +305,18 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
       setActiveUserLinkIndex(nextIdx);
     }
 
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setActivityLog(prev => [
+      {
+        id: `act-user-${Date.now()}-${index}`,
+        text: `You completed Link #${index + 1}`,
+        timestamp: timeStr,
+        actor: 'you',
+      },
+      ...prev,
+    ]);
+
     onUpdateSession({
       ...session,
       partnerLinks: updated,
@@ -269,100 +341,136 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
       
-      {/* Session Top Status Bar */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          
-          {/* Room ID & Partner Info */}
-          <div className="flex items-center space-x-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100">
-              <Radio className="h-4 w-4 text-zinc-300" strokeWidth={1.5} />
-            </div>
-
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-sm font-semibold text-white">
-                  Room <span className="font-mono">{session.roomCode}</span>
-                </h1>
-                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300 border border-zinc-700">
-                  {session.packageType}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-950 text-zinc-400 border border-zinc-800">
-                  {session.dwellTimeSeconds}s verification
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Partner: @{session.partner.username} • 24h IP isolation active
-              </p>
-            </div>
+      {/* Top Header Card */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-4">
+        {/* LinkPulse Bar with Hamburger Menu */}
+        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-bold tracking-tight text-white">LinkPulse</span>
           </div>
 
-          {/* Controls & Test speed */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center space-x-1 bg-zinc-950 border border-zinc-800 rounded-md p-0.5 text-xs">
-              <span className="text-[10px] text-zinc-500 px-1.5 font-medium">
-                Speed:
-              </span>
-              <button
-                type="button"
-                id="speed-normal-btn"
-                onClick={() => setSimulationSpeed('normal')}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  simulationSpeed === 'normal' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                30s
-              </button>
-              <button
-                type="button"
-                id="speed-fast-btn"
-                onClick={() => setSimulationSpeed('fast')}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  simulationSpeed === 'fast' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                5s (Fast)
-              </button>
-              <button
-                type="button"
-                id="speed-instant-btn"
-                onClick={() => setSimulationSpeed('instant')}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                  simulationSpeed === 'instant' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                1s
-              </button>
-            </div>
-
+          <div className="relative">
             <button
               type="button"
-              id="report-dispute-btn"
-              onClick={onOpenDispute}
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+              id="room-menu-btn"
+              onClick={() => setShowRoomMenu(prev => !prev)}
+              className="p-1.5 rounded-md border border-zinc-800 bg-zinc-950 text-zinc-300 hover:text-white hover:border-zinc-700 transition-colors cursor-pointer"
+              title="Menu"
+              aria-label="Room menu"
             >
-              Report
+              <Menu className="h-4 w-4" strokeWidth={2} />
             </button>
 
-            {session.status !== 'completed' && (
-              <button
-                type="button"
-                id="abandon-session-btn"
-                onClick={() => setShowForfeitModal(true)}
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-              >
-                Leave Exchange
-              </button>
+            {showRoomMenu && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl z-30 py-1 text-xs text-zinc-300 divide-y divide-zinc-800 animate-in fade-in duration-100">
+                <div className="px-3 py-2">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Exchange Session</p>
+                  <p className="font-mono text-zinc-200 mt-0.5">#{formattedRoomCode}</p>
+                </div>
+                <div className="py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRoomMenu(false);
+                      setShowSessionDetails(true);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Session Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRoomMenu(false);
+                      onOpenDispute();
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                  >
+                    Report a Problem
+                  </button>
+                </div>
+                <div className="py-1">
+                  {session.status !== 'completed' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRoomMenu(false);
+                        setShowForfeitModal(true);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-red-500/10 text-red-400 transition-colors cursor-pointer"
+                    >
+                      Leave Exchange
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowRoomMenu(false);
+                        onCloseRoom();
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-zinc-800 text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      Close Room
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Minimal Progress Bars */}
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-zinc-800/80">
+        {/* Back Link & Room Number */}
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            id="room-back-btn"
+            onClick={() => {
+              if (session.status === 'completed') {
+                onCloseRoom();
+              } else {
+                setShowForfeitModal(true);
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="h-4 w-4 text-zinc-400" strokeWidth={2} />
+            <span className="font-semibold text-white">
+              Exchange #{formattedRoomCode}
+            </span>
+          </button>
+        </div>
+
+        {/* Partner Details */}
+        <div className="flex flex-col items-center justify-center text-center py-2">
+          <div className="relative mb-2">
+            <img
+              src={partner.avatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${partner.username}`}
+              alt={partner.username}
+              className="h-14 w-14 rounded-full border-2 border-zinc-700 bg-zinc-800 object-cover shadow"
+            />
+            <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+          </div>
+
+          <div className="text-base font-semibold text-white">
+            @{partner.username}
+          </div>
+
+          <div className="flex items-center justify-center space-x-1.5 mt-0.5 text-xs text-emerald-400 font-medium">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Active Partner</span>
+          </div>
+
+          <div className="text-xs text-zinc-400 mt-1 font-mono">
+            Trust {partner.trustScore} · {partner.successRate || 100}% Success
+          </div>
+        </div>
+
+        {/* Minimal Progress Bar Overview without timing controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-zinc-800/80">
           <div>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-zinc-400">Your Queue</span>
-              <span className="text-zinc-200 tabular-nums">
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-zinc-400">Your Progress</span>
+              <span className="text-zinc-200 tabular-nums font-mono">
                 {userVerifiedCount}/{userTotalCount} ({userProgressPercent}%)
               </span>
             </div>
@@ -375,9 +483,9 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
           </div>
 
           <div>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-zinc-400">Partner Progress (@{session.partner.username})</span>
-              <span className="text-zinc-200 tabular-nums">
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-zinc-400">Partner Progress</span>
+              <span className="text-zinc-200 tabular-nums font-mono">
                 {partnerVerifiedCount}/{partnerTotalCount} ({partnerProgressPercent}%)
               </span>
             </div>
@@ -886,6 +994,126 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* LIVE ACTIVITY SECTION */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+          <div className="flex items-center space-x-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+              LIVE ACTIVITY
+            </h3>
+          </div>
+          <span className="text-[10px] text-zinc-500 font-mono">Real-time room events</span>
+        </div>
+
+        <div className="space-y-2">
+          {activityLog.length === 0 ? (
+            <div className="text-xs text-zinc-500 py-2 text-center">No activity recorded yet</div>
+          ) : (
+            activityLog.slice(0, 8).map((act) => (
+              <div
+                key={act.id}
+                className="flex items-center justify-between text-xs py-2 px-3 rounded-md bg-zinc-950/60 border border-zinc-800/60"
+              >
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                      act.actor === 'you'
+                        ? 'bg-emerald-400'
+                        : act.actor === 'partner'
+                        ? 'bg-blue-400'
+                        : 'bg-zinc-500'
+                    }`}
+                  />
+                  <span className="font-mono text-zinc-200 truncate">
+                    {act.text}
+                  </span>
+                </div>
+                <div className="shrink-0 flex items-center space-x-1.5 text-zinc-500 font-mono text-[11px] ml-2">
+                  <Clock className="h-3 w-3 text-zinc-500" strokeWidth={1.5} />
+                  <span>{act.timestamp}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* SESSION DETAILS & REPORT A PROBLEM */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+        <div>
+          <button
+            type="button"
+            id="toggle-session-details-btn"
+            onClick={() => setShowSessionDetails(prev => !prev)}
+            className="flex items-center space-x-2 text-xs font-semibold text-zinc-300 hover:text-white transition-colors cursor-pointer w-full text-left"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-zinc-400 transition-transform duration-200 ${
+                showSessionDetails ? 'rotate-180' : ''
+              }`}
+              strokeWidth={2}
+            />
+            <span>Session details</span>
+          </button>
+
+          {showSessionDetails && (
+            <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2 text-xs animate-in fade-in duration-150">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-400">
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>Room Code:</span>
+                  <span className="font-mono text-zinc-200 font-semibold">#{formattedRoomCode}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>Exchange Size:</span>
+                  <span className="text-zinc-200">{session.packageType} ({userTotalCount} links)</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>Verification Standard:</span>
+                  <span className="text-zinc-200">{session.dwellTimeSeconds}s per link</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>IP Isolation:</span>
+                  <span className="text-emerald-400 font-mono">Active (24h protection)</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>Your Network IP:</span>
+                  <span className="font-mono text-zinc-300">{currentUser.ipAddress}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-zinc-800/40">
+                  <span>Partner Network IP:</span>
+                  <span className="font-mono text-zinc-300">{partner.ipAddress}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Report a Problem */}
+        <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between">
+          <button
+            type="button"
+            id="report-problem-btn"
+            onClick={onOpenDispute}
+            className="inline-flex items-center space-x-1.5 text-xs text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+          >
+            <AlertTriangle className="h-3.5 w-3.5 text-red-400" strokeWidth={1.5} />
+            <span>Report a problem</span>
+          </button>
+
+          {session.status !== 'completed' && (
+            <button
+              type="button"
+              id="leave-exchange-bottom-btn"
+              onClick={() => setShowForfeitModal(true)}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+            >
+              Leave Exchange
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Rating Modal */}
