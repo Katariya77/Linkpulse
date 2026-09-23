@@ -465,13 +465,13 @@ export const DiscoveryPool: React.FC<DiscoveryPoolProps> = ({
                       id={`propose-btn-${peer.id}`}
                       disabled={!!cooldown || isSuspended || isInSession}
                       onClick={() => onProposeExchange(peer)}
-                      className={`rounded-md px-4 py-2 sm:py-1.5 text-xs font-medium transition-colors ${
+                      className={`rounded-md px-4 py-2 sm:py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
                         cooldown || isSuspended || isInSession
                           ? 'bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed'
-                          : 'bg-white text-zinc-950 hover:bg-zinc-200 font-semibold cursor-pointer'
+                          : 'bg-white text-zinc-950 hover:bg-zinc-200 cursor-pointer shadow-sm'
                       }`}
                     >
-                      Invite to Exchange
+                      <span>Start</span>
                     </button>
                   </div>
                 </div>

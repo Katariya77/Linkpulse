@@ -133,7 +133,7 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
           {/* Package Type Selector */}
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1.5">
-              Exchange Volume
+              Exchange Size
             </label>
             <div className="grid grid-cols-2 gap-2.5">
               <button
@@ -175,10 +175,10 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
             </div>
           </div>
 
-          {/* Retention Dwell Time */}
+          {/* Verification Time */}
           <div>
             <label className="text-xs font-medium text-zinc-400 block mb-1.5">
-              Retention Dwell Time Per Link
+              Verification Time Per Link
             </label>
             <div className="grid grid-cols-2 gap-2.5">
               <button
@@ -211,11 +211,11 @@ export const ProposeModal: React.FC<ProposeModalProps> = ({
             </div>
           </div>
 
-          {/* Your Shortened URLs */}
+          {/* Your Links */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-medium text-zinc-400">
-                Your URLs ({links.length}/{targetCount})
+                Your Links ({links.length}/{targetCount})
               </label>
               <button
                 type="button"

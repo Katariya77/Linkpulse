@@ -1,6 +1,6 @@
 export type UserStatus = 'online' | 'in_session' | 'away' | 'offline';
 export type TrustTier = 'elite' | 'reliable' | 'caution' | 'at_risk' | 'suspended';
-export type PackageType = '5x5' | '10x10';
+export type PackageType = '5x5' | '10x10' | '20x20';
 export type UserRole = 'admin' | 'member';
 
 export type PublicTabId = 'marketplace' | 'room' | 'leaderboard' | 'goals' | 'auth' | 'referral';
@@ -154,7 +154,7 @@ export interface ExchangeLink {
 
 export interface PartnerTelemetry {
   currentLinkIndex: number;
-  currentLinkStatus: 'waiting' | 'dwelling' | 'solved' | 'verified';
+  currentLinkStatus: 'waiting' | 'verifying' | 'dwelling' | 'solved' | 'verified';
   secondsRemaining: number;
   completedCount: number;
   totalCount: number;

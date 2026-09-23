@@ -102,7 +102,7 @@ const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
     id: 'notif-2',
     type: 'verification',
     title: 'Shortlink Click Verified',
-    message: 'Marcus Chen verified your shrinkme.io link with 35s dwell time. Link recorded successfully in session history.',
+    message: 'Marcus Chen verified your shrinkme.io link with 35s verification time. Link recorded successfully in session history.',
     timestamp: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
     timeAgo: '22m ago',
     isRead: false,
@@ -129,7 +129,7 @@ const INITIAL_MOCK_NOTIFICATIONS: AppNotification[] = [
     id: 'notif-4',
     type: 'quest',
     title: 'Daily Quest Completed: Speed Runner',
-    message: 'You completed 3 link verifications within the 45s target dwell window today. +150 Community XP collected!',
+    message: 'You completed 3 link verifications within the 45s target verification window today. +150 Community XP collected!',
     timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
     timeAgo: '5h ago',
     isRead: true,
@@ -569,6 +569,18 @@ export default function App() {
     setActiveTab('room');
   };
 
+  // Start exchange workflow: opens the redesigned Session Creation Chat Screen
+  const handleStartExchangeFromPeer = (partner: User) => {
+    // Check if cooldown is active
+    const cooldownRecord = ipCooldowns.find(c => c.partnerId === partner.id);
+    if (cooldownRecord && new Date(cooldownRecord.expiresAt).getTime() > Date.now()) {
+      showToast(`24-hour IP cooldown active with @${partner.username}. Please select another peer.`, 'alert');
+      return;
+    }
+    setProposePartner(partner);
+    setActiveTab('room');
+  };
+
   // Handle Invite to Exchange: Sends request to User B and displays waiting screen to User A
   const handleInviteToExchange = async (partner: User) => {
     // Check if cooldown is active
@@ -648,75 +660,14 @@ export default function App() {
     showToast('Exchange invitation cancelled.', 'info');
   };
 
-  // Simulate Peer Acceptance (for single-tab development preview evaluation)
+  // Simulate Peer Acceptance: opens Session Creation Chat Screen with partner
   const handleSimulatePeerAccept = () => {
     if (!outgoingInvitation) return;
     const partner = outgoingInvitation.partner;
-    const count = 5;
-    const dwellTime = 30;
-
-    const userLinks: ExchangeLink[] = outgoingInvitation.senderLinks.map((url, i) => ({
-      id: `usr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
-      status: 'pending',
-      dwellTimeRequired: dwellTime,
-      dwellTimeRemaining: dwellTime,
-      isOpened: false,
-    }));
-
-    const partnerBase = [
-      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/media-release-v2`,
-      `https://${partner.preferredShorteners[1] || 'ouo.io'}/crypto-bonus-pack`,
-      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/direct-download-mirror`,
-      `https://${partner.preferredShorteners[1] || 'ouo.io'}/software-key-patch`,
-      `https://${partner.preferredShorteners[0] || 'shrinkme.io'}/tech-setup-notes`,
-    ];
-
-    const partnerLinks: ExchangeLink[] = partnerBase.slice(0, count).map((url, i) => ({
-      id: `ptr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
-      status: 'pending',
-      dwellTimeRequired: dwellTime,
-      dwellTimeRemaining: dwellTime,
-      isOpened: false,
-    }));
-
-    const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
-    const roomCode = `#LP-${randomRoomNumber}`;
-    const sessionId = outgoingInvitation.sessionId;
-
-    const newSession: ExchangeSession = {
-      id: sessionId,
-      roomCode,
-      partner,
-      packageType: '5x5',
-      dwellTimeSeconds: dwellTime,
-      status: 'active',
-      userLinks,
-      partnerLinks,
-      partnerTelemetry: {
-        currentLinkIndex: 0,
-        currentLinkStatus: 'waiting',
-        secondsRemaining: dwellTime,
-        completedCount: 0,
-        totalCount: count,
-        lastActionText: 'Peer connected. Real-time Firebase room synchronized.',
-        latencyMs: 14,
-      },
-      createdAt: new Date().toISOString(),
-      startedAt: new Date().toISOString(),
-    };
-
-    if (sessionUser && sessionId.startsWith('ses_')) {
-      updateSessionInFirestore(sessionId, newSession).catch(() => {});
-    }
-
-    setActiveSession(newSession);
+    setProposePartner(partner);
     setOutgoingInvitation(null);
     setActiveTab('room');
-    showToast(`@${partner.username} accepted! Entering room ${roomCode}`, 'success');
+    showToast(`@${partner.username} accepted your invitation! Entering exchange chat...`, 'success');
   };
 
   // Monitor 30-second countdown for outgoing exchange invitation & subscribe to session updates
@@ -804,13 +755,13 @@ export default function App() {
   ) => {
     if (!proposePartner) return;
 
-    const count = packageType === '5x5' ? 5 : 10;
+    const count = packageType === '5x5' ? 5 : packageType === '10x10' ? 10 : 20;
     
     // User links provided by currentUser
     const userLinks: ExchangeLink[] = links.slice(0, count).map((url, i) => ({
       id: `usr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
+      url: url || `https://${currentUser.preferredShorteners?.[0] || 'shrinkme.io'}/link-${i + 1}`,
+      shortenerName: extractDomain(url) || 'shrinkme.io',
       status: 'pending',
       dwellTimeRequired: dwellTime,
       dwellTimeRemaining: dwellTime,
@@ -831,15 +782,19 @@ export default function App() {
       `https://${proposePartner.preferredShorteners[1] || 'ouo.io'}/instant-bonus-ref`,
     ];
 
-    const partnerLinks: ExchangeLink[] = partnerBase.slice(0, count).map((url, i) => ({
-      id: `ptr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
-      status: 'pending',
-      dwellTimeRequired: dwellTime,
-      dwellTimeRemaining: dwellTime,
-      isOpened: false,
-    }));
+    const partnerLinks: ExchangeLink[] = Array.from({ length: count }).map((_, i) => {
+      const baseItem = partnerBase[i % partnerBase.length];
+      const url = `${baseItem}-${i + 1}`;
+      return {
+        id: `ptr_link_${i + 1}`,
+        url,
+        shortenerName: extractDomain(url),
+        status: 'pending',
+        dwellTimeRequired: dwellTime,
+        dwellTimeRemaining: dwellTime,
+        isOpened: false,
+      };
+    });
 
     const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
     const roomCode = `#LP-${randomRoomNumber}`;
@@ -860,7 +815,7 @@ export default function App() {
         secondsRemaining: dwellTime,
         completedCount: 0,
         totalCount: count,
-        lastActionText: 'Peer connected. Real-time Firebase room initialized.',
+        lastActionText: 'Partner connected. Real-time room synchronized.',
         latencyMs: 18,
       },
       createdAt: new Date().toISOString(),
@@ -878,79 +833,12 @@ export default function App() {
     showToast(`Exchange Room ${roomCode} active with @${proposePartner.username}`, 'info');
   };
 
-  // Accept Incoming Proposal
+  // Accept Incoming Proposal: opens Session Creation Chat Screen with partner
   const handleAcceptIncomingProposal = (proposal: ExchangeProposal) => {
-    const count = proposal.packageType === '5x5' ? 5 : 10;
-    const shortenerB1 = currentUser.preferredShorteners?.[0] || 'shrinkme.io';
-    const shortenerB2 = currentUser.preferredShorteners?.[1] || 'ouo.io';
-    const baseUserLinks: string[] = [
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl1`,
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl2`,
-      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk3`,
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl4`,
-      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk5`,
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl6`,
-      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk7`,
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl8`,
-      `https://${shortenerB2}/ref-${currentUser.username.toLowerCase()}-pk9`,
-      `https://${shortenerB1}/ref-${currentUser.username.toLowerCase()}-dl10`,
-    ];
-
-    const userLinks: ExchangeLink[] = baseUserLinks.slice(0, count).map((url, i) => ({
-      id: `usr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
-      status: 'pending',
-      dwellTimeRequired: proposal.dwellTime,
-      dwellTimeRemaining: proposal.dwellTime,
-      isOpened: false,
-    }));
-
-    const partnerLinks: ExchangeLink[] = proposal.senderLinks.slice(0, count).map((url, i) => ({
-      id: `ptr_link_${i + 1}`,
-      url,
-      shortenerName: extractDomain(url),
-      status: 'pending',
-      dwellTimeRequired: proposal.dwellTime,
-      dwellTimeRemaining: proposal.dwellTime,
-      isOpened: false,
-    }));
-
-    const randomRoomNumber = Math.floor(10000 + Math.random() * 90000);
-    const roomCode = `#LP-${randomRoomNumber}`;
-    const sessionId = proposal.id.startsWith('ses_') ? proposal.id : `sess_${Date.now()}`;
-
-    const newSession: ExchangeSession = {
-      id: sessionId,
-      roomCode,
-      partner: proposal.sender,
-      packageType: proposal.packageType,
-      dwellTimeSeconds: proposal.dwellTime,
-      status: 'active',
-      userLinks,
-      partnerLinks,
-      partnerTelemetry: {
-        currentLinkIndex: 0,
-        currentLinkStatus: 'waiting',
-        secondsRemaining: proposal.dwellTime,
-        completedCount: 0,
-        totalCount: count,
-        lastActionText: 'Proposal accepted. Real-time Firebase room synchronized.',
-        latencyMs: 14,
-      },
-      createdAt: new Date().toISOString(),
-      startedAt: new Date().toISOString(),
-    };
-
-    setActiveSession(newSession);
+    setProposePartner(proposal.sender);
     setIncomingProposal(null);
     setActiveTab('room');
-
-    if (sessionUser) {
-      updateSessionInFirestore(sessionId, newSession).catch(err => console.warn('Firestore proposal acceptance:', err));
-    }
-
-    showToast(`Joined Exchange Room ${roomCode} with @${proposal.sender.username}`, 'success');
+    showToast(`Accepted invitation! Entered exchange chat with @${proposal.sender.username}`, 'success');
   };
 
   const handleDeclineIncomingProposal = () => {
@@ -1063,14 +951,14 @@ export default function App() {
     showToast(`Exchange ${sessionRef} finalized. +2 Trust Score & 24h IP isolation stored to Firebase.`, 'success');
   };
 
-  // Forfeit / Abandon Session
+  // Leave / Abandon Exchange Session
   const handleAbandonSession = () => {
     if (!activeSession) return;
 
     const sessionRef = activeSession.roomCode;
     const partner = activeSession.partner;
 
-    applyTrustDelta(-10, `Abandoned active exchange room with @${partner.username}`, 'session_abandon', sessionRef);
+    applyTrustDelta(-10, `Left active exchange room early with @${partner.username}`, 'session_abandon', sessionRef);
 
     if (sessionUser && activeSession.id) {
       updateSessionInFirestore(activeSession.id, {
@@ -1080,7 +968,7 @@ export default function App() {
 
     setActiveSession(null);
     setActiveTab('marketplace');
-    showToast(`Session forfeited. -10 Trust Score penalty applied to Firebase audit log.`, 'alert');
+    showToast(`Left active exchange. -10 Trust Score penalty applied to audit log.`, 'alert');
   };
 
   // Submit Formal Dispute
@@ -1376,7 +1264,7 @@ export default function App() {
               peers={peers}
               ipCooldowns={ipCooldowns}
               incomingProposal={incomingProposal}
-              onProposeExchange={handleInviteToExchange}
+              onProposeExchange={handleStartExchangeFromPeer}
               onAcceptProposal={handleAcceptIncomingProposal}
               onDeclineProposal={handleDeclineIncomingProposal}
               onSimulateIncomingProposal={handleSimulateNewIncomingProposal}

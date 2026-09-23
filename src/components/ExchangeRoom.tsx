@@ -10,7 +10,9 @@ import {
   Activity, 
   Sliders,
   Eye,
-  Radio
+  Radio,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { ExchangeSession, ExchangeLink, User } from '../types';
 import { getTrustTier, extractDomain } from '../utils/trustUtils';
@@ -41,9 +43,13 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   const [isDwellRunning, setIsDwellRunning] = useState<boolean>(false);
   const [openedLinkIds, setOpenedLinkIds] = useState<Set<string>>(new Set());
 
+  // Toggle dropdown view to see all links vs single active link
+  const [showAllUserQueue, setShowAllUserQueue] = useState<boolean>(false);
+  const [showAllPartnerProgress, setShowAllPartnerProgress] = useState<boolean>(false);
+
   const [showRatingModal, setShowRatingModal] = useState<boolean>(false);
   const [ratingStars, setRatingStars] = useState<number>(5);
-  const [ratingTags, setRatingTags] = useState<string[]>(['Fast Dwell Time', 'Clean Links']);
+  const [ratingTags, setRatingTags] = useState<string[]>(['Fast Verification', 'Clean Links']);
   const [ratingFeedback, setRatingFeedback] = useState<string>('Smooth exchange session, verified without issue.');
   const [showForfeitModal, setShowForfeitModal] = useState<boolean>(false);
 
@@ -53,8 +59,8 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   const partnerLinks = Array.isArray(session?.partnerLinks) ? session.partnerLinks : [];
   const userLinks = Array.isArray(session?.userLinks) ? session.userLinks : [];
   const partner = session?.partner || {
-    id: 'peer_fallback',
-    username: 'Peer',
+    id: 'partner_fallback',
+    username: 'Partner',
     trustScore: 80,
     ipAddress: '192.168.1.1',
   };
@@ -77,6 +83,14 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   const partnerVerifiedCount = userLinks.filter(l => l.status === 'verified').length;
   const partnerTotalCount = userLinks.length;
   const partnerProgressPercent = partnerTotalCount > 0 ? Math.round((partnerVerifiedCount / partnerTotalCount) * 100) : 0;
+
+  const isUserAllDone = userTotalCount > 0 && userVerifiedCount === userTotalCount;
+  const activeUserLink = partnerLinks[activeUserLinkIndex] || partnerLinks[0];
+
+  const partnerWorkingIndex = userLinks.findIndex(l => l.status === 'in_progress' || l.status === 'pending');
+  const partnerActiveIndex = partnerWorkingIndex !== -1 ? partnerWorkingIndex : (userLinks.length > 0 ? userLinks.length - 1 : 0);
+  const currentPartnerWorkingLink = userLinks[partnerActiveIndex];
+  const isPartnerAllDone = partnerTotalCount > 0 && partnerVerifiedCount === partnerTotalCount;
 
   const isBothCompleted = userProgressPercent === 100 && partnerProgressPercent === 100;
 
@@ -155,10 +169,10 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             partnerTelemetry: {
               ...partnerTelemetry,
               currentLinkIndex: nextPendingIndex,
-              currentLinkStatus: 'dwelling',
+              currentLinkStatus: 'verifying',
               secondsRemaining: simulationSpeed === 'normal' ? 24 : 4,
               totalCount: userLinks.length,
-              lastActionText: `Dwelling link #${nextPendingIndex + 1} (${extractDomain(link.url)})`,
+              lastActionText: `Verifying link #${nextPendingIndex + 1} (${extractDomain(link.url)})`,
               latencyMs: 24,
             }
           });
@@ -226,6 +240,11 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
     setIsDwellRunning(false);
     setCurrentDwellCountdown(0);
 
+    const nextIdx = updated.findIndex(l => l.status !== 'verified');
+    if (nextIdx !== -1) {
+      setActiveUserLinkIndex(nextIdx);
+    }
+
     onUpdateSession({
       ...session,
       partnerLinks: updated,
@@ -241,9 +260,9 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
   };
 
   const AVAILABLE_TAGS = [
-    'Fast Dwell Time',
-    'Clean Links',
     'Fast Verification',
+    'Clean Links',
+    'Responsive Partner',
     'Reliable Partner',
   ];
 
@@ -254,7 +273,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           
-          {/* Room ID & Peer Info */}
+          {/* Room ID & Partner Info */}
           <div className="flex items-center space-x-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100">
               <Radio className="h-4 w-4 text-zinc-300" strokeWidth={1.5} />
@@ -269,11 +288,11 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
                   {session.packageType}
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-950 text-zinc-400 border border-zinc-800">
-                  {session.dwellTimeSeconds}s dwell
+                  {session.dwellTimeSeconds}s verification
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Peer: @{session.partner.username} • IP pair isolated ({currentUser.ipAddress} ⇄ {session.partner.ipAddress})
+                Partner: @{session.partner.username} • 24h IP isolation active
               </p>
             </div>
           </div>
@@ -330,9 +349,9 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
                 type="button"
                 id="abandon-session-btn"
                 onClick={() => setShowForfeitModal(true)}
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
               >
-                Forfeit (-10)
+                Leave Exchange
               </button>
             )}
           </div>
@@ -386,9 +405,29 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
                 Visit & verify partner's links
               </p>
             </div>
-            <span className="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded tabular-nums">
-              {userVerifiedCount}/{userTotalCount} Done
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded tabular-nums">
+                {userVerifiedCount}/{userTotalCount} Done
+              </span>
+              <button
+                type="button"
+                id="toggle-user-queue-dropdown-btn"
+                onClick={() => setShowAllUserQueue(prev => !prev)}
+                title={showAllUserQueue ? "Collapse to active link" : "Show all links dropdown"}
+                aria-label="Toggle all links dropdown"
+                className={`p-1 rounded border transition-colors cursor-pointer flex items-center justify-center ${
+                  showAllUserQueue
+                    ? 'border-zinc-700 bg-zinc-800 text-white'
+                    : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:border-zinc-700'
+                }`}
+              >
+                {showAllUserQueue ? (
+                  <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Anti-Abuse Sensor */}
@@ -402,96 +441,200 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             </span>
           </div>
 
-          {/* Links Queue */}
+          {/* Links Queue Area */}
           <div className="space-y-2 flex-1">
-            {partnerLinks.map((link, idx) => {
-              const isVerified = link.status === 'verified';
-              const isInProgress = link.status === 'in_progress';
-              const isCurrent = idx === activeUserLinkIndex;
-              const isLocked = idx > activeUserLinkIndex && !isVerified;
+            {isUserAllDone ? (
+              <div className="rounded-md border border-zinc-800/80 bg-zinc-950/60 p-4 text-center space-y-1.5">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+                  <Check className="h-4 w-4" strokeWidth={2} />
+                </div>
+                <div className="text-xs font-semibold text-white">All Links in Your Queue Verified</div>
+                <p className="text-[11px] text-zinc-400">
+                  You have verified all {userTotalCount} links series-wise.
+                </p>
+              </div>
+            ) : !showAllUserQueue && activeUserLink ? (
+              /* SINGLE ACTIVE LINK VIEW (Default) */
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono px-0.5">
+                  <span>Active Link #{activeUserLinkIndex + 1} of {userTotalCount}</span>
+                  <span className="text-zinc-500">Auto-advances series-wise</span>
+                </div>
 
-              return (
                 <div
-                  key={link.id}
-                  id={`partner-link-card-${idx}`}
-                  className={`rounded-md border p-3 transition-colors ${
-                    isVerified
-                      ? 'border-zinc-800/60 bg-zinc-950/40 text-zinc-400'
-                      : isCurrent
-                      ? 'border-zinc-700 bg-zinc-900/70 text-zinc-100'
-                      : 'border-zinc-800/40 bg-zinc-950/20 opacity-50'
-                  }`}
+                  id={`partner-link-card-${activeUserLinkIndex}`}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900/80 p-3.5 shadow-sm space-y-3"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-                      <div className="shrink-0 font-mono text-xs text-zinc-400">
-                        {isVerified ? (
-                          <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-800 text-zinc-200">
-                            <Check className="h-3 w-3" strokeWidth={2} />
-                          </span>
-                        ) : (
-                          <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-                            {idx + 1}
-                          </span>
-                        )}
-                      </div>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-800 border border-zinc-700 font-mono text-xs font-bold text-white">
+                        {activeUserLinkIndex + 1}
+                      </span>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-1.5">
-                          <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.2 text-zinc-400 border border-zinc-800">
-                            {link.shortenerName}
+                          <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.5 text-zinc-300 border border-zinc-800">
+                            {activeUserLink.shortenerName}
                           </span>
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            {session.dwellTimeSeconds}s dwell
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {session.dwellTimeSeconds}s verification
                           </span>
                         </div>
-                        <div className="font-mono text-xs truncate mt-0.5 text-zinc-200">
-                          {link.url}
+                        <div className="font-mono text-xs truncate mt-1 text-white select-all">
+                          {activeUserLink.url}
                         </div>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="shrink-0">
-                      {isVerified ? (
-                        <span className="text-[11px] font-mono text-zinc-400">
-                          Verified
-                        </span>
-                      ) : isLocked ? (
-                        <span className="text-[11px] text-zinc-600 font-mono">
-                          Locked
-                        </span>
-                      ) : !link.isOpened ? (
+                      {!activeUserLink.isOpened ? (
                         <button
                           type="button"
-                          id={`open-link-btn-${idx}`}
-                          onClick={() => handleOpenLinkAndStartTimer(link, idx)}
-                          className="rounded bg-white text-zinc-950 hover:bg-zinc-200 px-3 py-1 text-xs font-semibold transition-colors flex items-center gap-1"
+                          id={`open-link-btn-${activeUserLinkIndex}`}
+                          onClick={() => handleOpenLinkAndStartTimer(activeUserLink, activeUserLinkIndex)}
+                          className="rounded bg-white text-zinc-950 hover:bg-zinc-200 px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow"
                         >
                           <span>Open Link</span>
                           <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
                         </button>
                       ) : isDwellRunning && currentDwellCountdown > 0 ? (
-                        <div className="flex items-center space-x-1.5 bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 text-xs font-mono">
-                          <Clock className="h-3 w-3 text-zinc-400 animate-spin" strokeWidth={1.5} />
+                        <div className="flex items-center space-x-1.5 bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded text-zinc-200 text-xs font-mono">
+                          <Clock className="h-3.5 w-3.5 text-zinc-400 animate-spin" strokeWidth={1.5} />
                           <span>{currentDwellCountdown}s</span>
                         </div>
                       ) : (
                         <button
                           type="button"
-                          id={`verify-task-btn-${idx}`}
-                          onClick={() => handleVerifyLink(idx)}
-                          className="rounded bg-white text-zinc-950 hover:bg-zinc-200 px-3 py-1 text-xs font-semibold transition-colors flex items-center gap-1"
+                          id={`verify-task-btn-${activeUserLinkIndex}`}
+                          onClick={() => handleVerifyLink(activeUserLinkIndex)}
+                          className="rounded bg-emerald-400 hover:bg-emerald-300 text-zinc-950 px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shadow"
                         >
-                          <Check className="h-3 w-3" strokeWidth={2} />
+                          <Check className="h-3.5 w-3.5" strokeWidth={2} />
                           <span>Verify</span>
                         </button>
                       )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllUserQueue(true)}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span>View all {userTotalCount} links dropdown</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* DROPDOWN OF ALL QUEUE LINKS */}
+            {showAllUserQueue && (
+              <div className="space-y-2 pt-1 border-t border-zinc-800/60 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono px-0.5">
+                  <span>All Links in Queue ({partnerLinks.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllUserQueue(false)}
+                    className="text-zinc-400 hover:text-white flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Show active only</span>
+                    <ChevronUp className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {partnerLinks.map((link, idx) => {
+                  const isVerified = link.status === 'verified';
+                  const isCurrent = idx === activeUserLinkIndex;
+                  const isLocked = idx > activeUserLinkIndex && !isVerified;
+
+                  return (
+                    <div
+                      key={link.id}
+                      id={`partner-link-card-${idx}`}
+                      className={`rounded-md border p-3 transition-colors ${
+                        isVerified
+                          ? 'border-zinc-800/60 bg-zinc-950/40 text-zinc-400'
+                          : isCurrent
+                          ? 'border-zinc-700 bg-zinc-900/70 text-zinc-100'
+                          : 'border-zinc-800/40 bg-zinc-950/20 opacity-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                          <div className="shrink-0 font-mono text-xs text-zinc-400">
+                            {isVerified ? (
+                              <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-800 text-zinc-200">
+                                <Check className="h-3 w-3" strokeWidth={2} />
+                              </span>
+                            ) : (
+                              <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                                {idx + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.2 text-zinc-400 border border-zinc-800">
+                                {link.shortenerName}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono">
+                                {session.dwellTimeSeconds}s verification
+                              </span>
+                            </div>
+                            <div className="font-mono text-xs truncate mt-0.5 text-zinc-200">
+                              {link.url}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="shrink-0">
+                          {isVerified ? (
+                            <span className="text-[11px] font-mono text-zinc-400">
+                              Verified
+                            </span>
+                          ) : isLocked ? (
+                            <span className="text-[11px] text-zinc-600 font-mono">
+                              Locked
+                            </span>
+                          ) : !link.isOpened ? (
+                            <button
+                              type="button"
+                              id={`open-link-btn-${idx}`}
+                              onClick={() => handleOpenLinkAndStartTimer(link, idx)}
+                              className="rounded bg-white text-zinc-950 hover:bg-zinc-200 px-3 py-1 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Open Link</span>
+                              <ExternalLink className="h-3 w-3" strokeWidth={1.5} />
+                            </button>
+                          ) : isDwellRunning && currentDwellCountdown > 0 ? (
+                            <div className="flex items-center space-x-1.5 bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 text-xs font-mono">
+                              <Clock className="h-3 w-3 text-zinc-400 animate-spin" strokeWidth={1.5} />
+                              <span>{currentDwellCountdown}s</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              id={`verify-task-btn-${idx}`}
+                              onClick={() => handleVerifyLink(idx)}
+                              className="rounded bg-white text-zinc-950 hover:bg-zinc-200 px-3 py-1 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Check className="h-3 w-3" strokeWidth={2} />
+                              <span>Verify</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -500,15 +643,35 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-3">
             <div>
               <h2 className="text-xs font-semibold text-white">
-                2. Partner Live Progress
+                2. Partner Progress
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5">
                 @{session.partner.username} verifying your links
               </p>
             </div>
-            <span className="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded tabular-nums">
-              {partnerVerifiedCount}/{partnerTotalCount} Done
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 px-2 py-0.5 rounded tabular-nums">
+                {partnerVerifiedCount}/{partnerTotalCount} Done
+              </span>
+              <button
+                type="button"
+                id="toggle-partner-progress-dropdown-btn"
+                onClick={() => setShowAllPartnerProgress(prev => !prev)}
+                title={showAllPartnerProgress ? "Collapse to active link" : "Show all links dropdown"}
+                aria-label="Toggle all partner links dropdown"
+                className={`p-1 rounded border transition-colors cursor-pointer flex items-center justify-center ${
+                  showAllPartnerProgress
+                    ? 'border-zinc-700 bg-zinc-800 text-white'
+                    : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white hover:border-zinc-700'
+                }`}
+              >
+                {showAllPartnerProgress ? (
+                  <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Activity Feed Banner */}
@@ -522,66 +685,162 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             </span>
           </div>
 
-          {/* User Links List */}
+          {/* User Links Area (Partner Progress) */}
           <div className="space-y-2 flex-1">
-            {userLinks.map((link, idx) => {
-              const isVerified = link.status === 'verified';
-              const isInProgress = link.status === 'in_progress';
+            {isPartnerAllDone ? (
+              <div className="rounded-md border border-zinc-800/80 bg-zinc-950/60 p-4 text-center space-y-1.5">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+                  <Check className="h-4 w-4" strokeWidth={2} />
+                </div>
+                <div className="text-xs font-semibold text-white">All Links Verified by Partner</div>
+                <p className="text-[11px] text-zinc-400">
+                  @{session.partner.username} verified all {partnerTotalCount} of your links.
+                </p>
+              </div>
+            ) : !showAllPartnerProgress && currentPartnerWorkingLink ? (
+              /* SINGLE ACTIVE LINK VIEW (Partner Working Link) */
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono px-0.5">
+                  <span>Partner Working On: Link #{partnerActiveIndex + 1} of {partnerTotalCount}</span>
+                  <span className="text-zinc-500">Live Telemetry</span>
+                </div>
 
-              return (
                 <div
-                  key={link.id}
-                  id={`user-link-telemetry-${idx}`}
-                  className={`rounded-md border p-3 transition-colors ${
-                    isVerified
-                      ? 'border-zinc-800/60 bg-zinc-950/40 text-zinc-400'
-                      : isInProgress
-                      ? 'border-zinc-700 bg-zinc-900/70 text-zinc-100'
-                      : 'border-zinc-800/40 bg-zinc-950/20'
-                  }`}
+                  id={`user-link-telemetry-${partnerActiveIndex}`}
+                  className="rounded-lg border border-zinc-700 bg-zinc-900/80 p-3.5 shadow-sm space-y-3"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center space-x-2.5 min-w-0 flex-1">
-                      <div className="shrink-0 font-mono text-xs text-zinc-400">
-                        {isVerified ? (
-                          <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-800 text-zinc-200">
-                            <Check className="h-3 w-3" strokeWidth={2} />
-                          </span>
-                        ) : (
-                          <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-                            {idx + 1}
-                          </span>
-                        )}
-                      </div>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-800 border border-zinc-700 font-mono text-xs font-bold text-white">
+                        {partnerActiveIndex + 1}
+                      </span>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-1.5">
-                          <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.2 text-zinc-400 border border-zinc-800">
-                            {link.shortenerName}
+                          <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.5 text-zinc-300 border border-zinc-800">
+                            {currentPartnerWorkingLink.shortenerName}
                           </span>
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            Your link #{idx + 1}
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            Your link #{partnerActiveIndex + 1}
                           </span>
                         </div>
-                        <div className="font-mono text-xs truncate mt-0.5 text-zinc-300">
-                          {link.url}
+                        <div className="font-mono text-xs truncate mt-1 text-zinc-200">
+                          {currentPartnerWorkingLink.url}
                         </div>
                       </div>
                     </div>
 
                     <div className="shrink-0 text-right font-mono text-xs">
-                      {isVerified ? (
-                        <span className="text-zinc-400">Verified</span>
-                      ) : isInProgress ? (
-                        <span className="text-zinc-200">Dwelling...</span>
+                      {currentPartnerWorkingLink.status === 'verified' ? (
+                        <span className="text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
+                          Verified
+                        </span>
+                      ) : currentPartnerWorkingLink.status === 'in_progress' || partnerTelemetry.currentLinkStatus === 'verifying' ? (
+                        <div className="flex items-center space-x-1.5 bg-zinc-800 border border-zinc-700 px-2.5 py-1 rounded text-zinc-200 text-xs">
+                          <Clock className="h-3 w-3 text-zinc-400 animate-spin" strokeWidth={1.5} />
+                          <span>Verifying ({partnerTelemetry.secondsRemaining}s)</span>
+                        </div>
                       ) : (
-                        <span className="text-zinc-600">Pending</span>
+                        <span className="text-zinc-500 bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded">
+                          Pending
+                        </span>
                       )}
                     </div>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPartnerProgress(true)}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span>View all {partnerTotalCount} links dropdown</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* DROPDOWN OF ALL PARTNER PROGRESS LINKS */}
+            {showAllPartnerProgress && (
+              <div className="space-y-2 pt-1 border-t border-zinc-800/60 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono px-0.5">
+                  <span>All Your Links ({userLinks.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPartnerProgress(false)}
+                    className="text-zinc-400 hover:text-white flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Show active only</span>
+                    <ChevronUp className="h-3 w-3" />
+                  </button>
+                </div>
+
+                {userLinks.map((link, idx) => {
+                  const isVerified = link.status === 'verified';
+                  const isInProgress = link.status === 'in_progress';
+                  const isCurrentWorking = idx === partnerActiveIndex && !isVerified;
+
+                  return (
+                    <div
+                      key={link.id}
+                      id={`user-link-telemetry-${idx}`}
+                      className={`rounded-md border p-3 transition-colors ${
+                        isVerified
+                          ? 'border-zinc-800/60 bg-zinc-950/40 text-zinc-400'
+                          : isCurrentWorking || isInProgress
+                          ? 'border-zinc-700 bg-zinc-900/80 text-zinc-100'
+                          : 'border-zinc-800/40 bg-zinc-950/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                          <div className="shrink-0 font-mono text-xs text-zinc-400">
+                            {isVerified ? (
+                              <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-800 text-zinc-200">
+                                <Check className="h-3 w-3" strokeWidth={2} />
+                              </span>
+                            ) : (
+                              <span className="flex h-5 w-5 items-center justify-center rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                                {idx + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[10px] font-mono rounded bg-zinc-950 px-1.5 py-0.2 text-zinc-400 border border-zinc-800">
+                                {link.shortenerName}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono">
+                                Your link #{idx + 1}
+                              </span>
+                            </div>
+                            <div className="font-mono text-xs truncate mt-0.5 text-zinc-300">
+                              {link.url}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right font-mono text-xs">
+                          {isVerified ? (
+                            <span className="text-zinc-400">Verified</span>
+                          ) : isInProgress || (isCurrentWorking && partnerTelemetry.currentLinkStatus === 'verifying') ? (
+                            <span className="text-zinc-200 flex items-center gap-1">
+                              <Clock className="h-3 w-3 animate-spin text-zinc-400" />
+                              Verifying...
+                            </span>
+                          ) : (
+                            <span className="text-zinc-600">Pending</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -611,7 +870,7 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
             <div>
               <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-                Session Completion Guard
+                Completion Status
               </h4>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Completion unlocks when both sides reach 100% verified status.
@@ -729,16 +988,16 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 p-5 space-y-3">
             <h3 className="text-sm font-semibold text-white">
-              Forfeit Active Session?
+              Leave Active Exchange?
             </h3>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Abandoning an active exchange applies a mandatory -10 Trust Score penalty recorded on your public ledger.
+              Leaving an active exchange applies a -10 Trust Score penalty recorded on your public ledger.
             </p>
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowForfeitModal(false)}
-                className="rounded px-3 py-1.5 text-xs text-zinc-400 hover:text-white"
+                className="rounded px-3 py-1.5 text-xs text-zinc-400 hover:text-white cursor-pointer"
               >
                 Cancel
               </button>
@@ -749,9 +1008,9 @@ export const ExchangeRoom: React.FC<ExchangeRoomProps> = ({
                   setShowForfeitModal(false);
                   onAbandonSession();
                 }}
-                className="rounded bg-zinc-100 text-zinc-950 hover:bg-white px-3.5 py-1.5 text-xs font-semibold"
+                className="rounded bg-zinc-100 text-zinc-950 hover:bg-white px-3.5 py-1.5 text-xs font-semibold cursor-pointer"
               >
-                Confirm Forfeit (-10)
+                Leave Exchange (-10 PTS)
               </button>
             </div>
           </div>

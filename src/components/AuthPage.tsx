@@ -1081,11 +1081,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             </div>
 
-            {/* Setting 5: Default Dwell Time Duration */}
+            {/* Setting 5: Default Verification Time Duration */}
             <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60">
               <div className="space-y-0.5">
-                <span className="text-sm font-semibold text-white block">Default Dwell Time</span>
-                <p className="text-xs text-zinc-400">Standard verification timer for shortlink completion.</p>
+                <span className="text-sm font-semibold text-white block">Default Verification Time</span>
+                <p className="text-xs text-zinc-400">Standard timer required for verifying each shortlink.</p>
               </div>
 
               <div className="flex items-center space-x-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
@@ -1093,7 +1093,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   type="button"
                   onClick={() => {
                     setDwellTimePreference(30);
-                    triggerSettingsNotice('Dwell time preference set to 30s');
+                    triggerSettingsNotice('Verification time preference set to 30s');
                   }}
                   className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
                     dwellTimePreference === 30 ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-400 hover:text-white'
@@ -1105,7 +1105,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   type="button"
                   onClick={() => {
                     setDwellTimePreference(45);
-                    triggerSettingsNotice('Dwell time preference set to 45s');
+                    triggerSettingsNotice('Verification time preference set to 45s');
                   }}
                   className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
                     dwellTimePreference === 45 ? 'bg-zinc-800 text-white font-semibold' : 'text-zinc-400 hover:text-white'

@@ -142,9 +142,9 @@ export const WaitingExchangeScreen: React.FC<WaitingExchangeScreenProps> = ({
               <div className="flex items-center space-x-2.5 border-t sm:border-t-0 sm:border-l border-zinc-800/80 pt-2 sm:pt-0 sm:pl-3">
                 <Timer className="h-4 w-4 text-zinc-400 shrink-0" strokeWidth={1.5} />
                 <div>
-                  <div className="text-[10px] text-zinc-400">Verification Rule</div>
+                  <div className="text-[10px] text-zinc-400">Verification Time</div>
                   <div className="font-semibold text-zinc-200">
-                    {dwellTime}s Min Dwell Time
+                    {dwellTime}s Verification Time
                   </div>
                 </div>
               </div>

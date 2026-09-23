@@ -147,10 +147,10 @@ export const TrustInspectorModal: React.FC<TrustInspectorModalProps> = ({
               <button
                 type="button"
                 id="test-score-minus10"
-                onClick={() => onSimulateScoreChange(-10, 'Simulated room forfeit/abandonment', 'session_abandon')}
+                onClick={() => onSimulateScoreChange(-10, 'Left active exchange early', 'session_abandon')}
                 className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs hover:bg-zinc-800 transition-colors"
               >
-                -10 (Forfeit)
+                -10 (Leave Exchange)
               </button>
               <button
                 type="button"

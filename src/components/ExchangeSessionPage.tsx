@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ExchangeSession, User, PackageType } from '../types';
 import { ExchangeRoom } from './ExchangeRoom';
+import { SessionCreationChat } from './SessionCreationChat';
 import { getTrustTier } from '../utils/trustUtils';
 
 interface ExchangeSessionPageProps {
@@ -47,7 +48,7 @@ export const ExchangeSessionPage: React.FC<ExchangeSessionPageProps> = ({
   onBackToPool,
   onJoinRoomByCode,
 }) => {
-  // If an active session is in progress, render the full-screen Exchange Room
+  // If an active session is in progress, render the full-screen Exchange Room (Progress Page)
   if (session) {
     return (
       <div className="w-full">
@@ -64,17 +65,20 @@ export const ExchangeSessionPage: React.FC<ExchangeSessionPageProps> = ({
     );
   }
 
-  // If user selected a partner to configure/propose an exchange session
+  // If user selected a partner (via "Start" or invitation acceptance), render the redesigned Session Creation Chat Screen
   if (proposePartner) {
     return (
-      <ExchangeProposalView
-        partner={proposePartner}
-        currentUser={currentUser}
-        isCooldownActive={isCooldownActive}
-        cooldownRemainingFormatted={cooldownRemainingFormatted}
-        onCancel={() => onSelectPartnerForProposal(null)}
-        onSubmitProposal={onSubmitProposal}
-      />
+      <div className="w-full py-2">
+        <SessionCreationChat
+          partner={proposePartner}
+          currentUser={currentUser}
+          onBack={() => onSelectPartnerForProposal(null)}
+          onEnterRoom={({ packageType, dwellTime, userLinks, roomCode, partner }) => {
+            onSubmitProposal(packageType, dwellTime, userLinks, `Synchronized room ${roomCode}`);
+          }}
+          onOpenTrustInspector={onOpenDispute}
+        />
+      </div>
     );
   }
 
@@ -229,7 +233,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
           {/* Package Volume Selection */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-zinc-300 block">
-              Exchange Volume Package
+              Exchange Size
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -279,10 +283,10 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
             </div>
           </div>
 
-          {/* Retention Dwell Time */}
+          {/* Verification Time */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-zinc-300 block">
-              Retention Dwell Time (Per Link)
+              Verification Time (Per Link)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -295,7 +299,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
                     : 'border-zinc-800 bg-zinc-900/30 text-zinc-400 hover:border-zinc-700'
                 }`}
               >
-                <span className="text-xs font-semibold block mb-0.5">30 Seconds Minimum Dwell</span>
+                <span className="text-xs font-semibold block mb-0.5">30 Seconds Verification Time</span>
                 <span className="text-xs text-zinc-400">Standard retention compliance</span>
               </button>
 
@@ -309,7 +313,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
                     : 'border-zinc-800 bg-zinc-900/30 text-zinc-400 hover:border-zinc-700'
                 }`}
               >
-                <span className="text-xs font-semibold block mb-0.5">45 Seconds High-Retention</span>
+                <span className="text-xs font-semibold block mb-0.5">45 Seconds Verification Time</span>
                 <span className="text-xs text-zinc-400">Maximizes ad network payout tiers</span>
               </button>
             </div>
@@ -319,7 +323,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
           <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/30 p-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-white flex items-center gap-2">
-                <span>Destination URLs</span>
+                <span>Your Links</span>
                 <span className="text-xs text-zinc-400 font-normal">
                   ({links.filter(l => l.trim().length > 0).length} of {targetCount} entered)
                 </span>
@@ -378,7 +382,7 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
           {/* Summary Box */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 space-y-4">
             <h3 className="text-xs font-semibold text-white">
-              Session Checklist
+              Exchange Summary
             </h3>
 
             <div className="space-y-2.5 text-xs">
@@ -387,16 +391,16 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
                 <span className="text-zinc-200 font-medium">@{partner.username}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
-                <span className="text-zinc-400">Volume:</span>
+                <span className="text-zinc-400">Exchange Size:</span>
                 <span className="text-zinc-200 font-medium">{packageType} ({targetCount} links each)</span>
               </div>
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
-                <span className="text-zinc-400">Dwell Requirement:</span>
+                <span className="text-zinc-400">Verification Time:</span>
                 <span className="text-zinc-200 font-medium">{dwellTime} seconds</span>
               </div>
               <div className="flex justify-between py-1 border-b border-zinc-800/80">
-                <span className="text-zinc-400">Cooldown Guard:</span>
-                <span className="text-zinc-200 font-medium">24 Hours Applied on finish</span>
+                <span className="text-zinc-400">Next Exchange Available:</span>
+                <span className="text-zinc-200 font-medium">24 Hours after completion</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-zinc-400">Completion Reward:</span>
@@ -435,10 +439,10 @@ const ExchangeProposalView: React.FC<ExchangeProposalViewProps> = ({
           <div className="rounded-lg border border-zinc-800/80 bg-zinc-950 p-4 space-y-2 text-xs text-zinc-400">
             <h4 className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              Bilateral Verification Guard
+              Fair Exchange Guarantee
             </h4>
             <p className="leading-relaxed">
-              Both parties must verify 100% of URLs and abide by dwell timers before completion unlocks. Abandoning an active room penalizes Trust Score by -10 PTS.
+              Both parties must verify 100% of links and wait the full verification timer before completion unlocks. Leaving an active room early applies a -10 Trust Score penalty.
             </p>
           </div>
 
@@ -650,17 +654,17 @@ const ExchangeSessionHub: React.FC<ExchangeSessionHubProps> = ({
           <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-4 space-y-2.5 text-xs">
             <h4 className="font-semibold text-white flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-zinc-400" strokeWidth={1.5} />
-              Protocol Architecture
+              Fair Exchange Standards
             </h4>
             <div className="space-y-2 text-zinc-400">
               <p>
-                • <strong>IP Isolation:</strong> Guaranteed unique IP per exchange pair to safeguard publisher ad network accounts.
+                • <strong>IP Protection:</strong> 24-hour protection between partners to safeguard advertiser accounts.
               </p>
               <p>
-                • <strong>30s/45s Dwell Enforcement:</strong> Automatic timer locks validation until retention threshold is met.
+                • <strong>30s/45s Verification Timer:</strong> Automatic timer ensures links are genuinely viewed and verified.
               </p>
               <p>
-                • <strong>Mutual Verification:</strong> 100% completion unlocks trust rewards; abandonment applies -10 PTS penalty.
+                • <strong>Mutual Verification:</strong> 100% completion unlocks trust rewards; leaving an active room early applies a -10 PTS penalty.
               </p>
             </div>
           </div>
